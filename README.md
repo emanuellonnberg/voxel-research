@@ -21,16 +21,18 @@ voxel-research/
 
 ## Features
 
-### Current (Week 1, Day 2)
+### Current (Week 1, Day 3)
 - ✅ Project structure
 - ✅ CMake build system
-- ✅ Vector3 math library with comprehensive tests (29 tests)
+- ✅ Vector3 math library (29 tests)
 - ✅ Material system with realistic physical properties (18 tests)
 - ✅ Voxel struct with damage system (4 tests)
 - ✅ VoxelWorld with sparse storage (17 tests)
 - ✅ Spatial queries (radius, box, raycast) (6 tests)
-- ✅ BoundingBox utilities
-- ✅ 74 unit tests passing
+- ✅ Camera system with WASD + mouse look (21 tests)
+- ✅ Rendering framework (stub for OpenGL)
+- ✅ Demo application with test scenes
+- ✅ 95 unit tests passing
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
@@ -103,7 +105,7 @@ ctest --output-on-failure
 - [x] Material database (Air, Wood, Brick, Concrete, Steel)
 - [x] Comprehensive unit tests (47 total)
 
-### Day 2 (Current) ✅
+### Day 2 ✅
 - [x] Voxel struct with HP and damage system
 - [x] VoxelWorld class with sparse storage
 - [x] Grid snapping and position management
@@ -112,11 +114,21 @@ ctest --output-on-failure
 - [x] BoundingBox utilities
 - [x] 27 new unit tests (74 total)
 
-### Day 3 (Next)
-- [ ] OpenGL context initialization
-- [ ] Camera system (WASD + mouse look)
-- [ ] Basic voxel renderer (instanced cubes)
-- [ ] Simple shaders
+### Day 3 (Current) ✅
+- [x] Camera system with full controls
+- [x] View/projection matrix generation
+- [x] Renderer framework (VoxelRenderer, Window classes)
+- [x] Instanced cube rendering architecture
+- [x] GLSL shader code (vertex + fragment)
+- [x] Demo application with test scenes
+- [x] 21 new unit tests (95 total)
+- [x] Stub implementation (ready for OpenGL)
+
+### Day 4 (Next)
+- [ ] Surface voxel detection
+- [ ] Voxel creation/destruction tools
+- [ ] Test structure builders
+- [ ] Performance profiling
 
 ## Material Properties
 
