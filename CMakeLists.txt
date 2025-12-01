@@ -94,17 +94,17 @@ add_library(VoxelCore
 
     # Voxel system
     src/voxel/VoxelWorld.cpp
-    # src/voxel/SpatialHash.cpp  (Week 1 Day 7)
+    # src/voxel/SpatialHash.cpp  (Week 2 Day 7)
+
+    # Rendering (Week 1 Day 3)
+    src/rendering/Camera.cpp
+    src/rendering/Renderer.cpp
 
     # Structural analysis (Week 3-4)
     # src/structural/StructuralAnalyzer.cpp
 
     # Physics (Week 5-6)
     # src/physics/PhysicsSystem.cpp
-
-    # Rendering (Week 1 Day 3-4)
-    # src/rendering/VoxelRenderer.cpp
-    # src/rendering/Camera.cpp
 )
 
 target_include_directories(VoxelCore PUBLIC
@@ -112,11 +112,16 @@ target_include_directories(VoxelCore PUBLIC
     ${CMAKE_SOURCE_DIR}/src
 )
 
-# Main executable (to be created later)
-# add_executable(VoxelDemo
-#     src/main.cpp
-# )
-# target_link_libraries(VoxelDemo VoxelCore OpenGL::GL glfw)
+# Main executable
+add_executable(VoxelDemo
+    src/main.cpp
+)
+target_link_libraries(VoxelDemo VoxelCore)
+
+# OpenGL/GLFW linking (if available)
+if(OpenGL_FOUND AND glfw3_FOUND)
+    target_link_libraries(VoxelDemo OpenGL::GL glfw)
+endif()
 
 # Tests
 if(BUILD_TESTS)
@@ -124,6 +129,7 @@ if(BUILD_TESTS)
         tests/test_Vector3.cpp
         tests/test_Material.cpp
         tests/test_VoxelWorld.cpp
+        tests/test_Camera.cpp
     )
 
     target_link_libraries(VoxelTests
