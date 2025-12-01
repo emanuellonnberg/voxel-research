@@ -92,17 +92,17 @@ add_library(VoxelCore
     src/core/Vector3.cpp
     src/core/Material.cpp
 
-    # Voxel system (to be added)
-    # src/voxel/VoxelWorld.cpp
-    # src/voxel/SpatialHash.cpp
+    # Voxel system
+    src/voxel/VoxelWorld.cpp
+    # src/voxel/SpatialHash.cpp  (Week 1 Day 7)
 
-    # Structural analysis (to be added)
+    # Structural analysis (Week 3-4)
     # src/structural/StructuralAnalyzer.cpp
 
-    # Physics (to be added)
+    # Physics (Week 5-6)
     # src/physics/PhysicsSystem.cpp
 
-    # Rendering (to be added)
+    # Rendering (Week 1 Day 3-4)
     # src/rendering/VoxelRenderer.cpp
     # src/rendering/Camera.cpp
 )
@@ -123,6 +123,7 @@ if(BUILD_TESTS)
     add_executable(VoxelTests
         tests/test_Vector3.cpp
         tests/test_Material.cpp
+        tests/test_VoxelWorld.cpp
     )
 
     target_link_libraries(VoxelTests

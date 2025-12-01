@@ -21,12 +21,16 @@ voxel-research/
 
 ## Features
 
-### Current (Week 1, Day 1)
+### Current (Week 1, Day 2)
 - ✅ Project structure
 - ✅ CMake build system
-- ✅ Vector3 math library with comprehensive tests
-- ✅ Material system with realistic physical properties
-- ✅ Unit test framework (GoogleTest)
+- ✅ Vector3 math library with comprehensive tests (29 tests)
+- ✅ Material system with realistic physical properties (18 tests)
+- ✅ Voxel struct with damage system (4 tests)
+- ✅ VoxelWorld with sparse storage (17 tests)
+- ✅ Spatial queries (radius, box, raycast) (6 tests)
+- ✅ BoundingBox utilities
+- ✅ 74 unit tests passing
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
@@ -91,20 +95,28 @@ ctest --output-on-failure
 
 ## Development Progress
 
-### Day 1 (Current) ✅
+### Day 1 ✅
 - [x] Project structure
 - [x] CMake build system
-- [x] Vector3 implementation with 30+ unit tests
+- [x] Vector3 implementation with 29 unit tests
 - [x] Material system with physics properties
 - [x] Material database (Air, Wood, Brick, Concrete, Steel)
-- [x] Comprehensive unit tests
+- [x] Comprehensive unit tests (47 total)
 
-### Day 2 (Next)
-- [ ] Voxel struct
-- [ ] VoxelWorld class with sparse storage
-- [ ] Spatial hashing
-- [ ] Neighbor finding
-- [ ] Unit tests
+### Day 2 (Current) ✅
+- [x] Voxel struct with HP and damage system
+- [x] VoxelWorld class with sparse storage
+- [x] Grid snapping and position management
+- [x] Neighbor finding (6-connected and 26-connected)
+- [x] Spatial queries (radius, box, raycast)
+- [x] BoundingBox utilities
+- [x] 27 new unit tests (74 total)
+
+### Day 3 (Next)
+- [ ] OpenGL context initialization
+- [ ] Camera system (WASD + mouse look)
+- [ ] Basic voxel renderer (instanced cubes)
+- [ ] Simple shaders
 
 ## Material Properties
 
