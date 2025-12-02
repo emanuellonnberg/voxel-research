@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 3 Day 11)
+### Current (Week 3 Day 12)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -38,11 +38,13 @@ voxel-research/
 - ✅ Structural stability analysis system (26 tests)
 - ✅ Support chain analysis and ground detection
 - ✅ Stability metrics (COM, tip risk, support area)
-- ✅ **Structural integrity analyzer with spring system (16 tests)**
+- ✅ **Structural integrity analyzer with spring system (22 tests)**
 - ✅ **Displacement-based failure detection**
-- ✅ **Mass calculation via raycasting**
+- ✅ **Mass calculation via raycasting with caching**
+- ✅ **Performance profiling (per-phase timing)**
+- ✅ **Cache management and statistics**
 - ✅ Demo application with 6 test scenes
-- ✅ **210 unit tests - ALL PASSING ✓**
+- ✅ **216 unit tests - ALL PASSING ✓**
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
@@ -253,7 +255,7 @@ The demo will display:
 
 ### Week 3: Structural Integrity Analysis (Track 1)
 
-#### Day 11 (Current) ✅
+#### Day 11 ✅
 - [x] SpringNode data structure (displacement, velocity, mass_supported)
 - [x] StructuralAnalyzer class with full pipeline
 - [x] BuildNodeGraph() - Creates nodes from surface voxels near damage
@@ -262,6 +264,15 @@ The demo will display:
 - [x] DetectFailures() - Checks displacement vs material limits
 - [x] FindFailedClusters() - Groups failed nodes for physics
 - [x] 16 new unit tests (210 total)
+- [x] **All tests passing (100%)**
+
+#### Day 12 (Current) ✅
+- [x] Detailed performance profiling (per-phase timing)
+- [x] Cache invalidation (InvalidateMassCache, ClearMassCache)
+- [x] Cache statistics tracking (hits/misses)
+- [x] GetCacheStats() for cache performance monitoring
+- [x] ProfilingMetrics in AnalysisResult
+- [x] 6 new comprehensive tests (216 total)
 - [x] **All tests passing (100%)**
 
 ## Material Properties
