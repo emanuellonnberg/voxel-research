@@ -21,18 +21,22 @@ voxel-research/
 
 ## Features
 
-### Current (Week 1, Day 3)
+### Current (Week 2, Day 8)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
 - ✅ Material system with realistic physical properties (18 tests)
 - ✅ Voxel struct with damage system (4 tests)
-- ✅ VoxelWorld with sparse storage (17 tests)
-- ✅ Spatial queries (radius, box, raycast) (6 tests)
+- ✅ VoxelWorld with sparse storage (27 tests)
+- ✅ Spatial queries (radius, box, raycast)
 - ✅ Camera system with WASD + mouse look (21 tests)
 - ✅ Rendering framework (stub for OpenGL)
-- ✅ Demo application with test scenes
-- ✅ 95 unit tests passing
+- ✅ VoxelUtils with structure generation (28 tests)
+- ✅ Surface detection with caching (10x speedup)
+- ✅ Spatial hashing for large structures (8x speedup)
+- ✅ Voxel clustering and connected components (18 tests)
+- ✅ Demo application with 6 test scenes
+- ✅ 168 unit tests passing
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
@@ -194,7 +198,7 @@ The demo will display:
 - [x] 10 new unit tests for surface caching (133 total)
 - [x] Performance test showing 10x+ speedup from caching
 
-#### Day 7 (Current) ✅
+#### Day 7 ✅
 - [x] SpatialHash class with grid-based partitioning
 - [x] GridCell structure with efficient hashing
 - [x] Integrated into VoxelWorld (optional, enable with EnableSpatialHashing())
@@ -203,9 +207,18 @@ The demo will display:
 - [x] 17 new unit tests (150 total)
 - [x] Performance test showing 8x+ speedup for 50K voxel structures
 
-#### Day 8-10 (Next)
-- [ ] Voxel clustering algorithms
-- [ ] Connected component analysis
+#### Day 8 (Current) ✅
+- [x] VoxelCluster structure with cluster properties (COM, mass, bounds)
+- [x] VoxelClustering class with static analysis methods
+- [x] BFS flood-fill algorithm for finding connected components
+- [x] FindAllClusters() - identify all disconnected structures
+- [x] FindClustersWithGrounding() - detect grounded vs floating clusters
+- [x] CalculateClusterProperties() - compute mass, COM, and bounds
+- [x] 18 new unit tests covering clustering algorithms (168 total)
+- [x] Support for 6-connectivity (face neighbors only)
+
+#### Day 9-10 (Next)
+- [ ] Ground detection and stability analysis
 - [ ] Week 2 polish
 
 ## Material Properties
