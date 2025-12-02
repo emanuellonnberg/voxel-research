@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 3 Day 13)
+### Current (Week 3 Day 14)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -38,7 +38,7 @@ voxel-research/
 - ✅ Structural stability analysis system (26 tests)
 - ✅ Support chain analysis and ground detection
 - ✅ Stability metrics (COM, tip risk, support area)
-- ✅ **Structural integrity analyzer with spring system (30 tests)**
+- ✅ **Structural integrity analyzer with spring system (38 tests)**
 - ✅ **Displacement-based failure detection**
 - ✅ **Mass calculation via raycasting with caching**
 - ✅ **Performance profiling (per-phase timing)**
@@ -46,8 +46,10 @@ voxel-research/
 - ✅ **Enhanced solver convergence (displacement tracking)**
 - ✅ **Displacement clamping (physical correctness)**
 - ✅ **Parameter sensitivity testing**
+- ✅ **Ground connectivity detection (flood-fill)**
+- ✅ **Dual failure criteria (displacement + connectivity)**
 - ✅ Demo application with 6 test scenes
-- ✅ **224 unit tests - ALL PASSING ✓**
+- ✅ **232 unit tests - ALL PASSING ✓**
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
@@ -278,7 +280,7 @@ The demo will display:
 - [x] 6 new comprehensive tests (216 total)
 - [x] **All tests passing (100%)**
 
-#### Day 13 (Current) ✅
+#### Day 13 ✅
 - [x] Displacement-based convergence (tracks max change)
 - [x] Displacement clamping (prevents upward sag)
 - [x] Dual convergence criteria (displacement + velocity)
@@ -286,6 +288,15 @@ The demo will display:
 - [x] Parameter sensitivity testing (timestep, damping)
 - [x] Numerical stability checks (NaN/Inf detection)
 - [x] 8 new solver tests (224 total)
+- [x] **All tests passing (100%)**
+
+#### Day 14 (Current) ✅
+- [x] Ground connectivity detection (BFS flood-fill)
+- [x] FindFloatingNodes() - Finds disconnected structures
+- [x] Dual failure criteria (displacement + connectivity)
+- [x] Disconnected node tracking (num_disconnected_nodes)
+- [x] Enhanced failure logging (breakdown by type)
+- [x] 8 new failure detection tests (232 total)
 - [x] **All tests passing (100%)**
 
 ## Material Properties
