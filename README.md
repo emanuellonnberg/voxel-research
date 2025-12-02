@@ -95,6 +95,35 @@ ctest --output-on-failure
 ./bin/VoxelTests
 ```
 
+## Running the Demo
+
+The demo application showcases the voxel system with various test scenarios:
+
+```bash
+cd build
+
+# Run with default scene (small building)
+./bin/VoxelDemo
+
+# Run specific scenes
+./bin/VoxelDemo tower      # Vertical tower (tests vertical loads)
+./bin/VoxelDemo wall       # 2D wall (tests basic stability)
+./bin/VoxelDemo building   # Hollow building with 4 walls
+./bin/VoxelDemo bridge     # Span with support pillars (tests horizontal loads)
+./bin/VoxelDemo arch       # Architectural arch (tests compression)
+./bin/VoxelDemo overhang   # Cantilevered structure (tests tension)
+
+# Run with performance benchmarks
+./bin/VoxelDemo building --benchmark
+```
+
+The demo will display:
+- Material database with physics properties
+- Voxel creation progress
+- Spatial query results
+- Performance benchmarks (if --benchmark flag used)
+- Rendering info (stub implementation in non-OpenGL environments)
+
 ## Development Progress
 
 ### Day 1 ✅
@@ -133,10 +162,33 @@ ctest --output-on-failure
 - [x] StructureBuilder with fluent API
 - [x] 28 new unit tests (123 total)
 
-### Day 5 (Next)
-- [ ] Week 1 testing & polish
-- [ ] Performance optimization
-- [ ] Benchmark suite
+### Day 5 (Current) ✅
+- [x] Additional test scenarios (bridge, arch, overhang)
+- [x] Enhanced scene selector with 6 different structures
+- [x] Performance benchmarking suite
+- [x] Profiled spatial queries, surface detection, and analysis tools
+- [x] Updated demo application with --benchmark flag
+- [x] All 123 tests passing
+
+### Week 1 Deliverable ✅
+**Completed:**
+- ✅ Running demo application with 6 test scenes
+- ✅ Camera system (WASD + mouse controls)
+- ✅ Voxel rendering framework (stub for OpenGL)
+- ✅ Comprehensive test suite (123 tests)
+- ✅ Performance benchmarks showing efficient operations
+
+**Performance Metrics:**
+- 8.26M voxels/sec insertion rate
+- 0.62 μs average radius query
+- 0.255 μs average neighbor query
+- 90 μs surface detection (180 voxels)
+
+### Week 2 (Next)
+- [ ] Surface detection caching
+- [ ] Spatial hashing for large structures
+- [ ] Voxel clustering algorithms
+- [ ] Connected component analysis
 
 ## Material Properties
 

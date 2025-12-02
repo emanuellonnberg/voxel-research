@@ -1,5 +1,8 @@
 #include <iostream>
+#include <cmath>
+#include <chrono>
 #include "VoxelWorld.h"
+#include "VoxelUtils.h"
 #include "Material.h"
 #include "Camera.h"
 #include "Renderer.h"
@@ -74,6 +77,201 @@ void CreateTestBuilding(VoxelWorld& world, int width, int depth, int height) {
     std::cout << "  Created " << world.GetVoxelCount() << " voxels\n";
 }
 
+void CreateTestBridge(VoxelWorld& world, int span_length, int pillar_height) {
+    std::cout << "Creating test bridge (span: " << span_length
+              << ", pillar height: " << pillar_height << ")...\n";
+
+    float voxel_size = world.GetVoxelSize();
+
+    // Left support pillar
+    for (int y = 0; y < pillar_height; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0),
+                      Voxel(MaterialDatabase::BRICK));
+    }
+
+    // Right support pillar
+    for (int y = 0; y < pillar_height; y++) {
+        world.SetVoxel(Vector3((span_length - 1) * voxel_size, y * voxel_size, 0),
+                      Voxel(MaterialDatabase::BRICK));
+    }
+
+    // Bridge deck (concrete for strength)
+    for (int x = 0; x < span_length; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, pillar_height * voxel_size, 0),
+                      Voxel(MaterialDatabase::CONCRETE));
+    }
+
+    std::cout << "  Created " << world.GetVoxelCount() << " voxels\n";
+}
+
+void CreateTestArch(VoxelWorld& world, int width, int height) {
+    std::cout << "Creating test arch (" << width << "x" << height << ")...\n";
+
+    float voxel_size = world.GetVoxelSize();
+    float radius = width / 2.0f;
+    Vector3 center(radius * voxel_size, 0, 0);
+
+    // Create arch using circular geometry
+    for (int x = 0; x < width; x++) {
+        for (int y = 0; y < height; y++) {
+            Vector3 pos(x * voxel_size, y * voxel_size, 0);
+            float dx = pos.x - center.x;
+            float dy = pos.y - center.y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+
+            // Create arch ring (outer radius = width/2, inner radius = width/2 - 2 voxels)
+            if (dist <= radius * voxel_size &&
+                dist >= (radius - 2) * voxel_size &&
+                y < height * 0.8f) {
+                world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
+            }
+        }
+    }
+
+    std::cout << "  Created " << world.GetVoxelCount() << " voxels\n";
+}
+
+void CreateTestOverhang(VoxelWorld& world, int base_width, int overhang_length) {
+    std::cout << "Creating test overhang (base: " << base_width
+              << ", overhang: " << overhang_length << ")...\n";
+
+    float voxel_size = world.GetVoxelSize();
+
+    // Base pillar
+    for (int y = 0; y < 10; y++) {
+        for (int x = 0; x < base_width; x++) {
+            world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, 0),
+                          Voxel(MaterialDatabase::CONCRETE));
+        }
+    }
+
+    // Cantilevered overhang (will stress structural analysis)
+    int overhang_height = 10;
+    for (int x = 0; x < base_width + overhang_length; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, overhang_height * voxel_size, 0),
+                      Voxel(MaterialDatabase::CONCRETE));
+    }
+
+    std::cout << "  Created " << world.GetVoxelCount() << " voxels\n";
+}
+
+/**
+ * Performance Benchmarking Utilities
+ */
+void RunPerformanceBenchmarks(VoxelWorld& world) {
+    using namespace std::chrono;
+    std::cout << "\n========================================\n";
+    std::cout << "  Performance Benchmarks\n";
+    std::cout << "========================================\n\n";
+
+    size_t initial_voxel_count = world.GetVoxelCount();
+    std::cout << "Testing with " << initial_voxel_count << " voxels\n\n";
+
+    // Benchmark 1: Bulk voxel creation
+    {
+        VoxelWorld test_world(0.05f);
+        auto start = high_resolution_clock::now();
+
+        for (int i = 0; i < 1000; i++) {
+            test_world.SetVoxel(Vector3(i * 0.05f, 0, 0), Voxel(MaterialDatabase::BRICK));
+        }
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(end - start);
+
+        std::cout << "Bulk voxel insertion (1000 voxels):\n";
+        std::cout << "  Time: " << duration.count() << " μs\n";
+        std::cout << "  Rate: " << (1000.0 / duration.count() * 1e6) << " voxels/sec\n\n";
+    }
+
+    // Benchmark 2: Spatial queries (radius)
+    {
+        auto positions = world.GetAllVoxelPositions();
+        if (!positions.empty()) {
+            Vector3 center = positions[positions.size() / 2];
+            auto start = high_resolution_clock::now();
+
+            for (int i = 0; i < 100; i++) {
+                auto results = world.GetVoxelsInRadius(center, 0.5f);
+            }
+
+            auto end = high_resolution_clock::now();
+            auto duration = duration_cast<microseconds>(end - start);
+
+            std::cout << "Radius queries (100 queries, r=0.5m):\n";
+            std::cout << "  Time: " << duration.count() << " μs\n";
+            std::cout << "  Avg: " << (duration.count() / 100.0) << " μs/query\n\n";
+        }
+    }
+
+    // Benchmark 3: Neighbor finding
+    {
+        auto positions = world.GetAllVoxelPositions();
+        if (!positions.empty()) {
+            Vector3 test_pos = positions[0];
+            auto start = high_resolution_clock::now();
+
+            for (int i = 0; i < 1000; i++) {
+                auto neighbors = world.GetNeighbors(test_pos, Connectivity::SIX);
+            }
+
+            auto end = high_resolution_clock::now();
+            auto duration = duration_cast<microseconds>(end - start);
+
+            std::cout << "Neighbor queries (1000 queries, 6-connected):\n";
+            std::cout << "  Time: " << duration.count() << " μs\n";
+            std::cout << "  Avg: " << (duration.count() / 1000.0) << " μs/query\n\n";
+        }
+    }
+
+    // Benchmark 4: Surface detection
+    {
+        auto start = high_resolution_clock::now();
+        auto surface_voxels = VoxelUtils::FindSurfaceVoxels(world);
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(end - start);
+
+        std::cout << "Surface detection (" << initial_voxel_count << " voxels):\n";
+        std::cout << "  Time: " << duration.count() << " μs\n";
+        std::cout << "  Found: " << surface_voxels.size() << " surface voxels\n";
+        std::cout << "  Percentage: " << (100.0 * surface_voxels.size() / initial_voxel_count) << "%\n\n";
+    }
+
+    // Benchmark 5: Bounding box calculation
+    {
+        auto start = high_resolution_clock::now();
+
+        for (int i = 0; i < 100; i++) {
+            auto bounds = VoxelUtils::GetBounds(world);
+        }
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(end - start);
+
+        std::cout << "Bounding box calculation (100 iterations):\n";
+        std::cout << "  Time: " << duration.count() << " μs\n";
+        std::cout << "  Avg: " << (duration.count() / 100.0) << " μs/calc\n\n";
+    }
+
+    // Benchmark 6: Center of mass calculation
+    {
+        auto start = high_resolution_clock::now();
+
+        for (int i = 0; i < 100; i++) {
+            auto com = VoxelUtils::GetCenterOfMass(world);
+        }
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(end - start);
+
+        std::cout << "Center of mass calculation (100 iterations):\n";
+        std::cout << "  Time: " << duration.count() << " μs\n";
+        std::cout << "  Avg: " << (duration.count() / 100.0) << " μs/calc\n\n";
+    }
+
+    std::cout << "========================================\n";
+}
+
 int main(int argc, char** argv) {
     std::cout << "========================================\n";
     std::cout << "  Voxel Destruction Engine - Demo\n";
@@ -104,9 +302,22 @@ int main(int argc, char** argv) {
             CreateTestWall(world, 10, 10);
         } else if (scene == "building") {
             CreateTestBuilding(world, 10, 10, 5);
+        } else if (scene == "bridge") {
+            CreateTestBridge(world, 20, 10);  // 20 voxel span, 10 voxel height
+        } else if (scene == "arch") {
+            CreateTestArch(world, 20, 15);
+        } else if (scene == "overhang") {
+            CreateTestOverhang(world, 5, 8);  // 5 voxel base, 8 voxel overhang
         } else {
             std::cout << "Unknown scene: " << scene << "\n";
-            std::cout << "Available scenes: tower, wall, building\n";
+            std::cout << "\nAvailable scenes:\n";
+            std::cout << "  tower     - Vertical tower (tests vertical loads)\n";
+            std::cout << "  wall      - 2D wall (tests basic stability)\n";
+            std::cout << "  building  - Hollow building with 4 walls\n";
+            std::cout << "  bridge    - Span with support pillars (tests horizontal loads)\n";
+            std::cout << "  arch      - Architectural arch (tests compression)\n";
+            std::cout << "  overhang  - Cantilevered structure (tests tension)\n";
+            std::cout << "\nUsage: " << argv[0] << " [scene] [--benchmark]\n";
             return 1;
         }
     } else {
@@ -128,6 +339,11 @@ int main(int argc, char** argv) {
         int neighbor_count = world.CountNeighbors(test_pos, Connectivity::SIX);
         std::cout << "  Neighbors of " << test_pos << ": "
                   << neighbor_count << " (6-connected)\n";
+    }
+
+    // Run performance benchmarks if requested
+    if (argc > 2 && std::string(argv[2]) == "--benchmark") {
+        RunPerformanceBenchmarks(world);
     }
 
     // Initialize rendering (stub in environments without OpenGL)
