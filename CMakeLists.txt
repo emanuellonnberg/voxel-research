@@ -104,7 +104,7 @@ add_library(VoxelCore
     src/rendering/Renderer.cpp
 
     # Structural analysis (Week 3-4)
-    # src/structural/StructuralAnalyzer.cpp
+    src/structural/StructuralAnalyzer.cpp
 
     # Physics (Week 5-6)
     # src/physics/PhysicsSystem.cpp
@@ -137,6 +137,7 @@ if(BUILD_TESTS)
         tests/test_SpatialHash.cpp
         tests/test_VoxelCluster.cpp
         tests/test_VoxelStability.cpp
+        tests/test_StructuralAnalyzer.cpp
     )
 
     target_link_libraries(VoxelTests
