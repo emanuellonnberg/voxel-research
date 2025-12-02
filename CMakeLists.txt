@@ -94,7 +94,7 @@ add_library(VoxelCore
 
     # Voxel system
     src/voxel/VoxelWorld.cpp
-    # src/voxel/SpatialHash.cpp  (Week 2 Day 7)
+    src/voxel/VoxelUtils.cpp
 
     # Rendering (Week 1 Day 3)
     src/rendering/Camera.cpp
@@ -130,6 +130,7 @@ if(BUILD_TESTS)
         tests/test_Material.cpp
         tests/test_VoxelWorld.cpp
         tests/test_Camera.cpp
+        tests/test_VoxelUtils.cpp
     )
 
     target_link_libraries(VoxelTests
