@@ -699,3 +699,211 @@ TEST_F(StructuralAnalyzerTest, ConvergenceComparison_DisplacementVsVelocity) {
     std::cout << "[Convergence Comparison] Iterations: " << result.iterations_used
               << ", Converged: " << result.converged << "\n";
 }
+
+// ===== Day 14: Failure Detection Enhancements =====
+
+TEST_F(StructuralAnalyzerTest, GroundConnectivity_ConnectedStructure) {
+    // Create tower connected to ground
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(voxel_size, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // All nodes should be connected to ground
+    EXPECT_EQ(result.num_disconnected_nodes, 0);
+
+    std::cout << "[Ground Connectivity] Connected structure: "
+              << result.num_disconnected_nodes << " disconnected\n";
+}
+
+TEST_F(StructuralAnalyzerTest, GroundConnectivity_FloatingStructure) {
+    // Create floating structure (no ground connection)
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 2; y < 5; y++) {  // Start at y=2, floating
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(voxel_size, 2 * voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // All nodes should be disconnected (floating)
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+    EXPECT_TRUE(result.structure_failed);
+
+    std::cout << "[Ground Connectivity] Floating structure: "
+              << result.num_disconnected_nodes << " disconnected\n";
+}
+
+TEST_F(StructuralAnalyzerTest, FailureDetection_RemoveBaseSupport) {
+    // Create tower, then remove base voxel
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Remove ground voxel
+    world.RemoveVoxel(Vector3(0, 0, 0));
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Upper voxels should be detected as floating
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+
+    std::cout << "[Failure Detection] Removed base: "
+              << result.num_failed_nodes << " failed, "
+              << result.num_disconnected_nodes << " disconnected\n";
+}
+
+TEST_F(StructuralAnalyzerTest, FailureDetection_BrokenBridge) {
+    // Create elevated bridge, remove middle support
+    float voxel_size = world.GetVoxelSize();
+
+    // Left pillar (grounded)
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Bridge span
+    for (int x = 0; x < 5; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 2 * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Right pillar (this will become disconnected)
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(4 * voxel_size, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Remove middle voxel of left pillar (disconnect right side)
+    world.RemoveVoxel(Vector3(0, voxel_size, 0));
+
+    std::vector<Vector3> damaged = {Vector3(0, voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Right side should be disconnected
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+
+    std::cout << "[Broken Bridge] Failed: " << result.num_failed_nodes
+              << ", Disconnected: " << result.num_disconnected_nodes << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, FailureDetection_DualCriteria) {
+    // Test structure that fails both by displacement AND disconnection
+    float voxel_size = world.GetVoxelSize();
+
+    // Weak material tower (will fail by displacement)
+    for (int y = 0; y < 10; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    // Remove a middle voxel (creates disconnection)
+    world.RemoveVoxel(Vector3(0, 5 * voxel_size, 0));
+
+    std::vector<Vector3> damaged = {Vector3(0, 5 * voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should detect failures from both criteria
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+
+    std::cout << "[Dual Criteria] Total failed: " << result.num_failed_nodes
+              << ", Disconnected: " << result.num_disconnected_nodes << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ClusterGeneration_MultipleFloatingPieces) {
+    // Create structure that breaks into pieces when base is removed
+    float voxel_size = world.GetVoxelSize();
+
+    // Central pillar (will be removed)
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Attached pieces at top
+    world.SetVoxel(Vector3(voxel_size, 4 * voxel_size, 0), Voxel(brick_id));
+    world.SetVoxel(Vector3(-voxel_size, 4 * voxel_size, 0), Voxel(brick_id));
+
+    // Remove base (makes everything float)
+    world.RemoveVoxel(Vector3(0, 0, 0));
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should detect floating pieces
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+
+    std::cout << "[Multiple Pieces] Failed: " << result.num_failed_nodes
+              << ", Clusters: " << result.failed_clusters.size() << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, GroundConnectivity_PartialDisconnection) {
+    // Create T-shape where one arm disconnects
+    float voxel_size = world.GetVoxelSize();
+
+    // Vertical trunk (ground connected)
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Left arm (connected)
+    for (int x = -2; x < 0; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 2 * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Right arm (will be disconnected)
+    for (int x = 1; x < 3; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 2 * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Damage at junction (disconnect right arm)
+    world.RemoveVoxel(Vector3(voxel_size, 2 * voxel_size, 0));
+
+    std::vector<Vector3> damaged = {Vector3(voxel_size, 2 * voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Right arm should be disconnected
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+
+    std::cout << "[Partial Disconnection] Disconnected: "
+              << result.num_disconnected_nodes << " nodes\n";
+}
+
+TEST_F(StructuralAnalyzerTest, FailureDetection_StableAfterDamage) {
+    // Structure that remains stable even after damage
+    float voxel_size = world.GetVoxelSize();
+
+    // Wide stable base
+    for (int x = 0; x < 5; x++) {
+        for (int y = 0; y < 2; y++) {
+            world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, 0), Voxel(brick_id));
+        }
+    }
+
+    // Remove one voxel from top
+    world.RemoveVoxel(Vector3(2 * voxel_size, voxel_size, 0));
+
+    std::vector<Vector3> damaged = {Vector3(2 * voxel_size, voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should remain stable (all voxels still connected)
+    EXPECT_FALSE(result.structure_failed) << "Structure should remain stable";
+    EXPECT_EQ(result.num_disconnected_nodes, 0);
+
+    std::cout << "[Stable After Damage] Failed: " << result.num_failed_nodes
+              << ", Disconnected: " << result.num_disconnected_nodes << "\n";
+}

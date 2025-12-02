@@ -212,6 +212,9 @@ private:
     void UpdateDisplacement(SpringNode* node, float dt);
     bool CheckConvergence() const;
 
+    // Day 14: Ground connectivity (flood-fill from ground anchors)
+    std::vector<SpringNode*> FindFloatingNodes();
+
     // Data
     VoxelWorld* world;
     std::vector<SpringNode*> nodes;

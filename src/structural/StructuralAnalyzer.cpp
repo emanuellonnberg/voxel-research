@@ -291,9 +291,49 @@ bool StructuralAnalyzer::SolveDisplacements() {
     return false;
 }
 
+std::vector<SpringNode*> StructuralAnalyzer::FindFloatingNodes() {
+    // Day 14: Flood-fill from ground anchors to find connected nodes
+    std::unordered_set<SpringNode*> grounded;
+    std::queue<SpringNode*> queue;
+
+    // Start from all ground anchors
+    for (auto* node : nodes) {
+        if (node->is_ground_anchor) {
+            queue.push(node);
+            grounded.insert(node);
+        }
+    }
+
+    // Flood-fill to find all nodes connected to ground
+    while (!queue.empty()) {
+        SpringNode* current = queue.front();
+        queue.pop();
+
+        for (auto* neighbor : current->neighbors) {
+            // Only traverse through non-failed neighbors
+            if (!neighbor->has_failed && grounded.find(neighbor) == grounded.end()) {
+                grounded.insert(neighbor);
+                queue.push(neighbor);
+            }
+        }
+    }
+
+    // Any node not grounded is floating (disconnected)
+    std::vector<SpringNode*> floating;
+    for (auto* node : nodes) {
+        if (!node->is_ground_anchor && grounded.find(node) == grounded.end()) {
+            node->is_disconnected = true;
+            floating.push_back(node);
+        }
+    }
+
+    return floating;
+}
+
 std::vector<SpringNode*> StructuralAnalyzer::DetectFailures() {
     std::vector<SpringNode*> failed_nodes;
 
+    // Criterion 1: Excessive displacement (Day 11)
     for (auto* node : nodes) {
         if (node->is_ground_anchor) {
             continue;  // Ground anchors can't fail
@@ -308,7 +348,23 @@ std::vector<SpringNode*> StructuralAnalyzer::DetectFailures() {
         }
     }
 
-    std::cout << "[StructuralAnalyzer] Detected " << failed_nodes.size() << " failed nodes\n";
+    // Criterion 2: Ground connectivity (Day 14)
+    // Find nodes that are disconnected from ground
+    auto floating_nodes = FindFloatingNodes();
+
+    // Add floating nodes to failed list (if not already failed)
+    for (auto* floating : floating_nodes) {
+        // Check if not already in failed_nodes
+        if (!floating->has_failed) {
+            floating->has_failed = true;
+            failed_nodes.push_back(floating);
+        }
+    }
+
+    std::cout << "[StructuralAnalyzer] Detected " << failed_nodes.size() << " failed nodes "
+              << "(" << (failed_nodes.size() - floating_nodes.size()) << " displacement, "
+              << floating_nodes.size() << " disconnected)\n";
+
     return failed_nodes;
 }
 
@@ -400,11 +456,20 @@ AnalysisResult StructuralAnalyzer::Analyze(
     result.iterations_used = iteration_count;
     result.solver_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_solver).count();
 
-    // Step 4: Detect failures (Day 12: Profile this step)
+    // Step 4: Detect failures (Day 12: Profile this step, Day 14: Track disconnected nodes)
     auto start_failure = Clock::now();
     auto failed_nodes = DetectFailures();
     result.num_failed_nodes = static_cast<int>(failed_nodes.size());
     result.failure_detection_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_failure).count();
+
+    // Day 14: Count disconnected nodes
+    int disconnected_count = 0;
+    for (const auto* node : failed_nodes) {
+        if (node->is_disconnected) {
+            disconnected_count++;
+        }
+    }
+    result.num_disconnected_nodes = disconnected_count;
 
     // Step 5: Find clusters
     if (!failed_nodes.empty()) {
