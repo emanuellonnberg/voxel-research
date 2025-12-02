@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 2 Complete)
+### Current (Week 3 Day 11)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -38,8 +38,11 @@ voxel-research/
 - ✅ Structural stability analysis system (26 tests)
 - ✅ Support chain analysis and ground detection
 - ✅ Stability metrics (COM, tip risk, support area)
+- ✅ **Structural integrity analyzer with spring system (16 tests)**
+- ✅ **Displacement-based failure detection**
+- ✅ **Mass calculation via raycasting**
 - ✅ Demo application with 6 test scenes
-- ✅ **194 unit tests - ALL PASSING ✓**
+- ✅ **210 unit tests - ALL PASSING ✓**
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
@@ -247,6 +250,19 @@ The demo will display:
 - ✅ 76 new tests added (118 → 194 tests)
 - ✅ **100% test pass rate maintained**
 - ✅ Foundation ready for Week 3-4 structural analysis
+
+### Week 3: Structural Integrity Analysis (Track 1)
+
+#### Day 11 (Current) ✅
+- [x] SpringNode data structure (displacement, velocity, mass_supported)
+- [x] StructuralAnalyzer class with full pipeline
+- [x] BuildNodeGraph() - Creates nodes from surface voxels near damage
+- [x] CalculateMassSupported() - Raycasts upward to calculate supported mass
+- [x] SolveDisplacements() - Iterative spring solver with damping
+- [x] DetectFailures() - Checks displacement vs material limits
+- [x] FindFailedClusters() - Groups failed nodes for physics
+- [x] 16 new unit tests (210 total)
+- [x] **All tests passing (100%)**
 
 ## Material Properties
 
