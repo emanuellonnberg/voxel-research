@@ -24,11 +24,24 @@ Voxel VoxelWorld::GetVoxel(const Vector3& position) const {
 
 void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
     Vector3 snapped = SnapToGrid(position);
+
+    bool was_solid = HasVoxel(snapped);
+
     if (voxel.IsSolid()) {
         voxels[snapped] = voxel;
+
+        // Update spatial hash if enabled (only insert if newly solid)
+        if (spatial_hash && !was_solid) {
+            spatial_hash->Insert(snapped);
+        }
     } else {
         // If setting to air, remove from map (sparse storage)
         voxels.erase(snapped);
+
+        // Remove from spatial hash if enabled
+        if (spatial_hash && was_solid) {
+            spatial_hash->Remove(snapped);
+        }
     }
 
     // Invalidate surface cache for this voxel and neighbors
@@ -37,7 +50,14 @@ void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
 
 void VoxelWorld::RemoveVoxel(const Vector3& position) {
     Vector3 snapped = SnapToGrid(position);
+
+    bool was_solid = HasVoxel(snapped);
     voxels.erase(snapped);
+
+    // Remove from spatial hash if enabled
+    if (spatial_hash && was_solid) {
+        spatial_hash->Remove(snapped);
+    }
 
     // Invalidate surface cache for this voxel and neighbors
     InvalidateSurfaceAt(snapped);
@@ -47,6 +67,11 @@ void VoxelWorld::Clear() {
     voxels.clear();
     surface_cache.clear();
     surface_cache_dirty = true;
+
+    // Clear spatial hash if enabled
+    if (spatial_hash) {
+        spatial_hash->Clear();
+    }
 }
 
 std::vector<Vector3> VoxelWorld::GetAllVoxelPositions() const {
@@ -96,11 +121,15 @@ int VoxelWorld::CountNeighbors(const Vector3& position,
 }
 
 std::vector<Vector3> VoxelWorld::GetVoxelsInRadius(const Vector3& center, float radius) const {
+    // Use spatial hash if enabled (much faster for large structures)
+    if (spatial_hash) {
+        return spatial_hash->QueryRadius(center, radius);
+    }
+
+    // Fallback: Naive implementation - check all voxels
     std::vector<Vector3> result;
     float radius_sq = radius * radius;
 
-    // Naive implementation - check all voxels
-    // TODO: Optimize with spatial partitioning (Week 1 Day 7)
     for (const auto& pair : voxels) {
         if (!pair.second.IsSolid()) continue;
 
@@ -114,9 +143,13 @@ std::vector<Vector3> VoxelWorld::GetVoxelsInRadius(const Vector3& center, float 
 }
 
 std::vector<Vector3> VoxelWorld::GetVoxelsInBox(const Vector3& min, const Vector3& max) const {
-    std::vector<Vector3> result;
+    // Use spatial hash if enabled (much faster for large structures)
+    if (spatial_hash) {
+        return spatial_hash->QueryBox(min, max);
+    }
 
-    // Iterate through grid cells in the box
+    // Fallback: Iterate through grid cells in the box
+    std::vector<Vector3> result;
     Vector3 min_snapped = SnapToGrid(min);
     Vector3 max_snapped = SnapToGrid(max);
 
@@ -272,4 +305,23 @@ void VoxelWorld::InvalidateSurfaceAt(const Vector3& position) {
     //         surface_cache.erase(neighbor_pos);
     //     }
     // }
+}
+
+// Spatial hashing methods
+
+void VoxelWorld::EnableSpatialHashing(float cell_size) {
+    if (!spatial_hash) {
+        spatial_hash = std::make_unique<SpatialHash>(cell_size);
+
+        // Populate spatial hash with existing voxels
+        for (const auto& pair : voxels) {
+            if (pair.second.IsSolid()) {
+                spatial_hash->Insert(pair.first);
+            }
+        }
+    }
+}
+
+void VoxelWorld::DisableSpatialHashing() {
+    spatial_hash.reset();
 }

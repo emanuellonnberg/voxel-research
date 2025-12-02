@@ -2,9 +2,11 @@
 
 #include "Vector3.h"
 #include "Voxel.h"
+#include "SpatialHash.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <memory>
 
 /**
  * VoxelWorld - Sparse voxel storage and queries
@@ -55,6 +57,11 @@ public:
     bool IsSurfaceVoxel(const Vector3& position) const;
     void InvalidateSurfaceCache();
 
+    // Spatial hashing (for large structures)
+    void EnableSpatialHashing(float cell_size = 1.0f);
+    void DisableSpatialHashing();
+    bool IsSpatialHashingEnabled() const { return spatial_hash != nullptr; }
+
     // Utility
     float GetVoxelSize() const { return voxel_size; }
     Vector3 SnapToGrid(const Vector3& position) const;
@@ -66,6 +73,9 @@ private:
     // Surface cache for performance
     mutable std::unordered_set<Vector3, Vector3::Hash> surface_cache;
     mutable bool surface_cache_dirty;
+
+    // Spatial hash for accelerating spatial queries (optional)
+    std::unique_ptr<SpatialHash> spatial_hash;
 
     // Helper methods
     void UpdateSurfaceCache() const;
