@@ -184,11 +184,21 @@ The demo will display:
 - 0.255 μs average neighbor query
 - 90 μs surface detection (180 voxels)
 
-### Week 2 (Next)
-- [ ] Surface detection caching
+### Week 2: Voxel System Completion
+
+#### Day 6 (Current) ✅
+- [x] Integrated surface detection into VoxelWorld class
+- [x] Implemented surface cache with automatic invalidation
+- [x] Cache-aware SetVoxel/RemoveVoxel operations
+- [x] GetSurfaceVoxels() method with lazy cache updates
+- [x] 10 new unit tests for surface caching (133 total)
+- [x] Performance test showing 10x+ speedup from caching
+
+#### Day 7-10 (Next)
 - [ ] Spatial hashing for large structures
 - [ ] Voxel clustering algorithms
 - [ ] Connected component analysis
+- [ ] Week 2 polish
 
 ## Material Properties
 

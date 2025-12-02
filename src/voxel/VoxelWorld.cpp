@@ -3,7 +3,7 @@
 #include <cmath>
 
 VoxelWorld::VoxelWorld(float voxel_size)
-    : voxel_size(voxel_size)
+    : voxel_size(voxel_size), surface_cache_dirty(true)
 {
 }
 
@@ -30,15 +30,23 @@ void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
         // If setting to air, remove from map (sparse storage)
         voxels.erase(snapped);
     }
+
+    // Invalidate surface cache for this voxel and neighbors
+    InvalidateSurfaceAt(snapped);
 }
 
 void VoxelWorld::RemoveVoxel(const Vector3& position) {
     Vector3 snapped = SnapToGrid(position);
     voxels.erase(snapped);
+
+    // Invalidate surface cache for this voxel and neighbors
+    InvalidateSurfaceAt(snapped);
 }
 
 void VoxelWorld::Clear() {
     voxels.clear();
+    surface_cache.clear();
+    surface_cache_dirty = true;
 }
 
 std::vector<Vector3> VoxelWorld::GetAllVoxelPositions() const {
@@ -199,4 +207,69 @@ const std::vector<Vector3>& VoxelWorld::GetNeighborOffsets(Connectivity connecti
     }();
 
     return (connectivity == Connectivity::SIX) ? offsets_6 : offsets_26;
+}
+
+// Surface detection methods
+
+bool VoxelWorld::IsSurfaceVoxel(const Vector3& position) const {
+    Vector3 snapped = SnapToGrid(position);
+
+    // Not a voxel = not surface
+    if (!HasVoxel(snapped)) {
+        return false;
+    }
+
+    // Check if any neighbor is air (6-connected)
+    const auto& offsets = GetNeighborOffsets(Connectivity::SIX);
+    for (const auto& offset : offsets) {
+        Vector3 neighbor_pos = snapped + (offset * voxel_size);
+        if (!HasVoxel(neighbor_pos)) {
+            return true;  // Has at least one air neighbor
+        }
+    }
+
+    return false;  // Completely surrounded by solid voxels
+}
+
+const std::unordered_set<Vector3, Vector3::Hash>& VoxelWorld::GetSurfaceVoxels() {
+    if (surface_cache_dirty) {
+        UpdateSurfaceCache();
+        surface_cache_dirty = false;
+    }
+    return surface_cache;
+}
+
+void VoxelWorld::InvalidateSurfaceCache() {
+    surface_cache_dirty = true;
+}
+
+void VoxelWorld::UpdateSurfaceCache() const {
+    surface_cache.clear();
+
+    // Check all voxels to see if they're surface
+    for (const auto& pair : voxels) {
+        if (IsSurfaceVoxel(pair.first)) {
+            surface_cache.insert(pair.first);
+        }
+    }
+}
+
+void VoxelWorld::InvalidateSurfaceAt(const Vector3& position) {
+    // When a voxel changes, it and its neighbors might change surface status
+    // For simplicity, mark entire cache as dirty
+    // (More optimized version would only update affected voxels)
+    surface_cache_dirty = true;
+
+    // Optional: Partial cache update (more complex but faster for small changes)
+    // Remove this voxel from cache
+    // surface_cache.erase(position);
+    //
+    // Check neighbors - they might become surface or interior
+    // for (auto& neighbor_pos : GetNeighbors(position, Connectivity::SIX)) {
+    //     if (IsSurfaceVoxel(neighbor_pos)) {
+    //         surface_cache.insert(neighbor_pos);
+    //     } else {
+    //         surface_cache.erase(neighbor_pos);
+    //     }
+    // }
 }
