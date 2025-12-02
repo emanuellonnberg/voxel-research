@@ -223,8 +223,16 @@ void StructuralAnalyzer::UpdateDisplacement(SpringNode* node, float dt) {
     node->velocity += acceleration * dt;
     node->velocity *= params.damping;
 
-    // Update displacement
+    // Update displacement (Day 13: Track old value for convergence)
     node->displacement += node->velocity * dt;
+
+    // Day 13: Clamp displacement to prevent unphysical upward sag
+    // Negative displacement means sagging downward (correct)
+    // Positive would mean pushing upward (incorrect)
+    if (node->displacement > 0.0f) {
+        node->displacement = 0.0f;
+        node->velocity = 0.0f;  // Stop upward motion
+    }
 }
 
 bool StructuralAnalyzer::CheckConvergence() const {
@@ -243,14 +251,38 @@ bool StructuralAnalyzer::SolveDisplacements() {
     for (int i = 0; i < params.max_iterations; i++) {
         iteration_count++;
 
+        // Day 13: Track maximum displacement change for convergence
+        float max_displacement_change = 0.0f;
+
+        // Store old displacements before update
+        std::vector<float> old_displacements;
+        old_displacements.reserve(nodes.size());
+        for (const auto* node : nodes) {
+            old_displacements.push_back(node->displacement);
+        }
+
         // Update all nodes
         for (auto* node : nodes) {
             UpdateDisplacement(node, params.timestep);
         }
 
-        // Check convergence
+        // Day 13: Calculate max displacement change
+        for (size_t j = 0; j < nodes.size(); j++) {
+            float change = std::abs(nodes[j]->displacement - old_displacements[j]);
+            max_displacement_change = std::max(max_displacement_change, change);
+        }
+
+        // Day 13: Convergence based on displacement change (more stable than velocity)
+        if (max_displacement_change < params.convergence_threshold) {
+            std::cout << "[StructuralAnalyzer] Converged in " << iteration_count
+                      << " iterations (max_change: " << max_displacement_change << "m)\n";
+            return true;
+        }
+
+        // Also check velocity-based convergence as backup
         if (CheckConvergence()) {
-            std::cout << "[StructuralAnalyzer] Converged in " << iteration_count << " iterations\n";
+            std::cout << "[StructuralAnalyzer] Converged in " << iteration_count
+                      << " iterations (velocity threshold)\n";
             return true;
         }
     }

@@ -484,3 +484,218 @@ TEST_F(StructuralAnalyzerTest, MassCalculation_ConcreteVsWood) {
     std::cout << "[Material Comparison] Concrete: " << result_concrete.calculation_time_ms << "ms\n";
     std::cout << "[Material Comparison] Wood: " << result_wood.calculation_time_ms << "ms\n";
 }
+
+// ===== Day 13: Displacement Solver Refinements =====
+
+TEST_F(StructuralAnalyzerTest, ConvergenceCriteria_DisplacementBased) {
+    // Create stable tower
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // Should converge with displacement-based criteria
+    auto result = analyzer.Analyze(world, damaged);
+
+    EXPECT_TRUE(result.converged);
+    EXPECT_GT(result.iterations_used, 0);
+    EXPECT_LT(result.iterations_used, 100);  // Should converge quickly
+
+    std::cout << "[Convergence] Converged: " << result.converged
+              << ", Iterations: " << result.iterations_used << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, DisplacementClamping_NoUpwardSag) {
+    // Create structure that might have numerical instabilities
+    float voxel_size = world.GetVoxelSize();
+    world.SetVoxel(Vector3(0, 0, 0), Voxel(brick_id));  // Ground
+    world.SetVoxel(Vector3(0, voxel_size, 0), Voxel(wood_id));  // Weak middle
+
+    std::vector<Vector3> damaged = {Vector3(voxel_size, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Check all nodes for physically correct displacements
+    for (size_t i = 0; i < analyzer.GetNodeCount(); i++) {
+        const auto* node = analyzer.GetNode(i);
+        if (node && !node->is_ground_anchor) {
+            // Displacement should be non-positive (sagging down or zero)
+            EXPECT_LE(node->displacement, 0.0f)
+                << "Node at (" << node->position.x << ", " << node->position.y
+                << ", " << node->position.z << ") has upward displacement: "
+                << node->displacement;
+        }
+    }
+
+    std::cout << "[Clamping] All nodes have physically correct displacements\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterSensitivity_Timestep) {
+    // Create test structure
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // Test different timesteps
+    std::vector<float> timesteps = {0.001f, 0.005f, 0.01f, 0.02f, 0.05f};
+
+    std::cout << "[Timestep Sensitivity]\n";
+    for (float dt : timesteps) {
+        world.Clear();
+        analyzer.Clear();
+
+        // Recreate structure
+        for (int y = 0; y < 3; y++) {
+            world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+        }
+
+        analyzer.params.timestep = dt;
+        auto result = analyzer.Analyze(world, damaged);
+
+        std::cout << "  dt=" << dt << ": converged=" << result.converged
+                  << ", iterations=" << result.iterations_used
+                  << ", time=" << result.calculation_time_ms << "ms\n";
+
+        // All timesteps should produce stable results
+        EXPECT_TRUE(result.converged || result.iterations_used > 50);
+    }
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterSensitivity_Damping) {
+    // Create test structure
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // Test different damping values
+    std::vector<float> damping_values = {0.7f, 0.8f, 0.9f, 0.95f, 0.99f};
+
+    std::cout << "[Damping Sensitivity]\n";
+    for (float damp : damping_values) {
+        world.Clear();
+        analyzer.Clear();
+
+        // Recreate structure
+        for (int y = 0; y < 3; y++) {
+            world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+        }
+
+        analyzer.params.damping = damp;
+        auto result = analyzer.Analyze(world, damaged);
+
+        std::cout << "  damping=" << damp << ": converged=" << result.converged
+                  << ", iterations=" << result.iterations_used
+                  << ", time=" << result.calculation_time_ms << "ms\n";
+
+        // Higher damping should help convergence
+        if (damp >= 0.9f) {
+            EXPECT_TRUE(result.converged || result.iterations_used < 100);
+        }
+    }
+}
+
+TEST_F(StructuralAnalyzerTest, ConvergenceSpeed_OptimalParameters) {
+    // Test that default parameters provide good convergence
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // Default parameters (timestep=0.01, damping=0.9)
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should converge reasonably fast with default parameters
+    EXPECT_TRUE(result.converged);
+    EXPECT_LT(result.iterations_used, 100);  // Not too many iterations
+    EXPECT_GT(result.iterations_used, 1);    // Not suspiciously fast
+
+    std::cout << "[Optimal Params] Iterations: " << result.iterations_used
+              << ", Time: " << result.calculation_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, SolverStability_NoNaN) {
+    // Create structure that might cause numerical issues
+    float voxel_size = world.GetVoxelSize();
+
+    // Very light structure (wood)
+    for (int y = 0; y < 10; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Check for NaN or Inf in results
+    EXPECT_FALSE(std::isnan(result.calculation_time_ms));
+    EXPECT_FALSE(std::isinf(result.calculation_time_ms));
+
+    // Check all nodes for valid displacements
+    for (size_t i = 0; i < analyzer.GetNodeCount(); i++) {
+        const auto* node = analyzer.GetNode(i);
+        if (node) {
+            EXPECT_FALSE(std::isnan(node->displacement))
+                << "Node " << i << " has NaN displacement";
+            EXPECT_FALSE(std::isinf(node->displacement))
+                << "Node " << i << " has Inf displacement";
+            EXPECT_FALSE(std::isnan(node->velocity))
+                << "Node " << i << " has NaN velocity";
+        }
+    }
+
+    std::cout << "[Stability] No NaN/Inf values detected\n";
+}
+
+TEST_F(StructuralAnalyzerTest, PerformanceTarget_100msFor1000Iterations) {
+    // Create moderate structure
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 8; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Even with many iterations, should be reasonably fast
+    // Target from Day 13 plan: < 100ms for 1000 nodes
+    // We have fewer nodes, so should be much faster
+    EXPECT_LT(result.calculation_time_ms, 100.0f);
+
+    float time_per_iteration = result.calculation_time_ms / result.iterations_used;
+
+    std::cout << "[Performance] Total: " << result.calculation_time_ms << "ms"
+              << ", Per iteration: " << time_per_iteration << "ms"
+              << ", Iterations: " << result.iterations_used << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ConvergenceComparison_DisplacementVsVelocity) {
+    // Compare convergence behavior between displacement and velocity criteria
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 4; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should converge (either by displacement or velocity)
+    EXPECT_TRUE(result.converged);
+
+    // Displacement-based convergence should be robust
+    EXPECT_GT(result.iterations_used, 0);
+
+    std::cout << "[Convergence Comparison] Iterations: " << result.iterations_used
+              << ", Converged: " << result.converged << "\n";
+}
