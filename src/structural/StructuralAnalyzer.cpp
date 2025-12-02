@@ -10,6 +10,8 @@ using Clock = std::chrono::high_resolution_clock;
 StructuralAnalyzer::StructuralAnalyzer()
     : world(nullptr)
     , iteration_count(0)
+    , cache_hits(0)
+    , cache_misses(0)
 {
 }
 
@@ -25,6 +27,34 @@ void StructuralAnalyzer::Clear() {
     node_map.clear();
     mass_cache.clear();
     iteration_count = 0;
+    cache_hits = 0;
+    cache_misses = 0;
+}
+
+void StructuralAnalyzer::ClearMassCache() {
+    mass_cache.clear();
+    cache_hits = 0;
+    cache_misses = 0;
+}
+
+void StructuralAnalyzer::InvalidateMassCache(const std::vector<Vector3>& changed_positions) {
+    if (changed_positions.empty()) {
+        return;
+    }
+
+    float voxel_size = world ? world->GetVoxelSize() : 0.05f;
+
+    for (const auto& pos : changed_positions) {
+        // Remove the position itself
+        mass_cache.erase(pos);
+
+        // Invalidate everything below (their supported mass changed)
+        // Go down up to 100m
+        for (float y = pos.y - 100.0f; y < pos.y; y += voxel_size) {
+            Vector3 below_pos(pos.x, y, pos.z);
+            mass_cache.erase(below_pos);
+        }
+    }
 }
 
 bool StructuralAnalyzer::IsGroundAnchor(const Vector3& position) const {
@@ -106,12 +136,16 @@ void StructuralAnalyzer::CalculateMassSupported() {
             continue;
         }
 
-        // Check cache first
+        // Check cache first (Day 12: Track cache performance)
         auto cache_it = mass_cache.find(node->position);
         if (cache_it != mass_cache.end()) {
             node->mass_supported = cache_it->second;
+            cache_hits++;
             continue;
         }
+
+        // Cache miss
+        cache_misses++;
 
         // Raycast upward
         Vector3 ray_origin = node->position;
@@ -306,29 +340,39 @@ AnalysisResult StructuralAnalyzer::Analyze(
     const std::vector<Vector3>& damaged_positions,
     float time_budget_ms)
 {
-    auto start = Clock::now();
+    auto start_total = Clock::now();
 
     AnalysisResult result;
     world = &voxel_world;
 
-    // Step 1: Build node graph
+    // Step 1: Build node graph (Day 12: Profile this step)
+    auto start_graph = Clock::now();
     BuildNodeGraph(damaged_positions);
+    result.node_graph_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_graph).count();
 
     if (nodes.empty()) {
         result.debug_info = "No nodes to analyze (no surface voxels near damage)";
         return result;
     }
 
-    // Step 2: Calculate mass supported
+    // Step 2: Calculate mass supported (Day 12: Profile this step)
+    auto start_mass = Clock::now();
     CalculateMassSupported();
+    result.mass_calc_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_mass).count();
+    result.cache_hits = cache_hits;
+    result.cache_misses = cache_misses;
 
-    // Step 3: Solve for displacements
+    // Step 3: Solve for displacements (Day 12: Profile this step)
+    auto start_solver = Clock::now();
     result.converged = SolveDisplacements();
     result.iterations_used = iteration_count;
+    result.solver_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_solver).count();
 
-    // Step 4: Detect failures
+    // Step 4: Detect failures (Day 12: Profile this step)
+    auto start_failure = Clock::now();
     auto failed_nodes = DetectFailures();
     result.num_failed_nodes = static_cast<int>(failed_nodes.size());
+    result.failure_detection_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_failure).count();
 
     // Step 5: Find clusters
     if (!failed_nodes.empty()) {
@@ -336,9 +380,9 @@ AnalysisResult StructuralAnalyzer::Analyze(
         result.failed_clusters = FindFailedClusters(failed_nodes);
     }
 
-    // Calculate elapsed time
-    auto end = Clock::now();
-    result.calculation_time_ms = std::chrono::duration<float, std::milli>(end - start).count();
+    // Calculate total elapsed time
+    result.calculation_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_total).count();
+    result.nodes_analyzed = static_cast<int>(nodes.size());
 
     // Debug info
     result.debug_info = "Analyzed " + std::to_string(nodes.size()) + " nodes in " +

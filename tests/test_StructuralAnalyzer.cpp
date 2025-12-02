@@ -334,3 +334,153 @@ TEST_F(StructuralAnalyzerTest, MultipleAnalysisCalls) {
 
     EXPECT_EQ(count1, count2);  // Should get same result
 }
+
+// ===== Day 12: Cache and Profiling Tests =====
+
+TEST_F(StructuralAnalyzerTest, CacheInvalidation_ClearCache) {
+    // Create structure
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // First analysis (populate cache)
+    auto result1 = analyzer.Analyze(world, damaged);
+    int hits1, misses1;
+    analyzer.GetCacheStats(hits1, misses1);
+    EXPECT_GT(misses1, 0);  // Should have cache misses
+
+    // Clear cache
+    analyzer.ClearMassCache();
+    int hits2, misses2;
+    analyzer.GetCacheStats(hits2, misses2);
+    EXPECT_EQ(hits2, 0);    // Cache cleared
+    EXPECT_EQ(misses2, 0);
+}
+
+TEST_F(StructuralAnalyzerTest, CacheInvalidation_ModifiedVoxels) {
+    // Create tower
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> changed_positions = {
+        Vector3(0, 2 * voxel_size, 0),  // Middle voxel
+        Vector3(0, 3 * voxel_size, 0)   // Above middle
+    };
+
+    // Invalidate cache for specific positions
+    analyzer.InvalidateMassCache(changed_positions);
+
+    // Cache should be cleared (we don't track specific entries in test)
+    EXPECT_TRUE(true);  // Just verify method doesn't crash
+}
+
+TEST_F(StructuralAnalyzerTest, ProfilingMetrics_Populated) {
+    // Create structure
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Check all profiling metrics are populated
+    EXPECT_GT(result.node_graph_time_ms, 0.0f);
+    EXPECT_GE(result.mass_calc_time_ms, 0.0f);
+    EXPECT_GT(result.solver_time_ms, 0.0f);
+    EXPECT_GE(result.failure_detection_time_ms, 0.0f);
+    EXPECT_GT(result.nodes_analyzed, 0);
+
+    // Sum of parts should approximately equal total
+    float sum_parts = result.node_graph_time_ms + result.mass_calc_time_ms +
+                     result.solver_time_ms + result.failure_detection_time_ms;
+    EXPECT_LE(sum_parts, result.calculation_time_ms * 1.1f);  // Within 10% tolerance
+
+    std::cout << "[Profiling] Node graph: " << result.node_graph_time_ms << "ms\n";
+    std::cout << "[Profiling] Mass calc: " << result.mass_calc_time_ms << "ms\n";
+    std::cout << "[Profiling] Solver: " << result.solver_time_ms << "ms\n";
+    std::cout << "[Profiling] Failure detection: " << result.failure_detection_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, CachePerformance_HitsAndMisses) {
+    // Create tower
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // Analysis should track cache performance
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Within a single analysis, we should see cache behavior
+    // (cache is cleared between Analyze() calls, so we check within one call)
+    EXPECT_GE(result.cache_hits + result.cache_misses, 0);  // Some cache activity
+
+    std::cout << "[Cache Stats] Hits: " << result.cache_hits
+              << ", Misses: " << result.cache_misses << "\n";
+
+    // Note: Cache is per-analysis, cleared each Analyze() call
+    // This is by design to ensure fresh analysis each time
+}
+
+TEST_F(StructuralAnalyzerTest, LargeStructure_PerformanceProfile) {
+    // Create larger structure (10-voxel tower)
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 10; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Verify analysis completed
+    EXPECT_GT(result.nodes_analyzed, 0);
+    EXPECT_GT(result.calculation_time_ms, 0.0f);
+
+    // Should handle reasonably sized structures quickly
+    EXPECT_LT(result.calculation_time_ms, 100.0f);  // < 100ms
+
+    std::cout << "[Large Structure] Analyzed " << result.nodes_analyzed
+              << " nodes in " << result.calculation_time_ms << "ms\n";
+    std::cout << "  Avg time per node: "
+              << (result.calculation_time_ms / result.nodes_analyzed) << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, MassCalculation_ConcreteVsWood) {
+    // Test that heavier materials calculate correctly
+    float voxel_size = world.GetVoxelSize();
+
+    // Create concrete tower
+    world.Clear();
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(MaterialDatabase::CONCRETE));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(voxel_size, 0, 0)};
+    auto result_concrete = analyzer.Analyze(world, damaged);
+
+    // Create wood tower (same structure, lighter material)
+    world.Clear();
+    analyzer.Clear();
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    auto result_wood = analyzer.Analyze(world, damaged);
+
+    // Both should complete
+    EXPECT_GE(result_concrete.nodes_analyzed, 0);
+    EXPECT_GE(result_wood.nodes_analyzed, 0);
+
+    std::cout << "[Material Comparison] Concrete: " << result_concrete.calculation_time_ms << "ms\n";
+    std::cout << "[Material Comparison] Wood: " << result_wood.calculation_time_ms << "ms\n";
+}

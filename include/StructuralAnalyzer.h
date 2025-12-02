@@ -77,6 +77,15 @@ struct AnalysisResult {
     int iterations_used;
     bool converged;
 
+    // Detailed profiling (Day 12)
+    float node_graph_time_ms;
+    float mass_calc_time_ms;
+    float solver_time_ms;
+    float failure_detection_time_ms;
+    int nodes_analyzed;
+    int cache_hits;
+    int cache_misses;
+
     // Debug info
     std::string debug_info;
 
@@ -87,6 +96,13 @@ struct AnalysisResult {
         , calculation_time_ms(0.0f)
         , iterations_used(0)
         , converged(false)
+        , node_graph_time_ms(0.0f)
+        , mass_calc_time_ms(0.0f)
+        , solver_time_ms(0.0f)
+        , failure_detection_time_ms(0.0f)
+        , nodes_analyzed(0)
+        , cache_hits(0)
+        , cache_misses(0)
     {}
 };
 
@@ -142,6 +158,25 @@ public:
      */
     void Clear();
 
+    /**
+     * Invalidate mass cache for positions (Day 12)
+     * Called when voxels are added/removed to clear affected cache entries
+     */
+    void InvalidateMassCache(const std::vector<Vector3>& changed_positions);
+
+    /**
+     * Clear entire mass cache (Day 12)
+     */
+    void ClearMassCache();
+
+    /**
+     * Get cache statistics (Day 12)
+     */
+    void GetCacheStats(int& hits, int& misses) const {
+        hits = cache_hits;
+        misses = cache_misses;
+    }
+
     // Tunable parameters
     struct Parameters {
         float timestep;                 // Simulation timestep (default 0.01s)
@@ -182,9 +217,11 @@ private:
     std::vector<SpringNode*> nodes;
     std::unordered_map<Vector3, SpringNode*, Vector3::Hash> node_map;
 
-    // Cache for mass calculation
+    // Cache for mass calculation (Day 11)
     std::unordered_map<Vector3, float, Vector3::Hash> mass_cache;
 
-    // Performance tracking
+    // Performance tracking (Day 11 + Day 12)
     int iteration_count;
+    mutable int cache_hits;    // Day 12: Track cache performance
+    mutable int cache_misses;  // Day 12: Track cache performance
 };
