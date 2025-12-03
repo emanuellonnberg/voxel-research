@@ -1203,3 +1203,121 @@ TEST_F(StructuralAnalyzerTest, Integration_Week3Summary) {
     EXPECT_GE(result.iterations_used, 0);
     EXPECT_GT(result.calculation_time_ms, 0.0f);
 }
+
+// ============================================================================
+// DAY 16: Performance Optimization Tests
+// ============================================================================
+
+TEST_F(StructuralAnalyzerTest, Optimization_InfluenceRadius) {
+    // Day 16: Test influence radius optimization
+    float voxel_size = world.GetVoxelSize();
+
+    // Create large structure (20x20 base)
+    for (int x = 0; x < 20; x++) {
+        for (int z = 0; z < 20; z++) {
+            for (int y = 0; y < 3; y++) {
+                world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, z * voxel_size), Voxel(brick_id));
+            }
+        }
+    }
+
+    // Damage at corner
+    Vector3 damage_pos(0, 0, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    // Test with large radius (should analyze many nodes)
+    analyzer.params.influence_radius = 50.0f;
+    auto result_large = analyzer.Analyze(world, damaged);
+
+    // Test with small radius (should analyze few nodes)
+    analyzer.params.influence_radius = 1.0f;
+    auto result_small = analyzer.Analyze(world, damaged);
+
+    // Small radius should analyze fewer nodes
+    EXPECT_LT(result_small.nodes_analyzed, result_large.nodes_analyzed);
+    EXPECT_LT(result_small.calculation_time_ms, result_large.calculation_time_ms);
+
+    std::cout << "[Optimization: Influence Radius]\n";
+    std::cout << "  Large radius (50m): " << result_large.nodes_analyzed << " nodes, "
+              << result_large.calculation_time_ms << "ms\n";
+    std::cout << "  Small radius (1m): " << result_small.nodes_analyzed << " nodes, "
+              << result_small.calculation_time_ms << "ms\n";
+    std::cout << "  Speedup: " << (result_large.calculation_time_ms / result_small.calculation_time_ms) << "x\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Optimization_ParallelMassCalculation) {
+    // Day 16: Test parallel mass calculation speedup
+    float voxel_size = world.GetVoxelSize();
+
+    // Create structure with many voxels
+    for (int x = 0; x < 15; x++) {
+        for (int z = 0; z < 15; z++) {
+            for (int y = 0; y < 5; y++) {
+                world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, z * voxel_size), Voxel(brick_id));
+            }
+        }
+    }
+
+    Vector3 damage_pos(7 * voxel_size, 0, 7 * voxel_size);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    // Test with parallel disabled
+    analyzer.params.use_parallel_mass_calc = false;
+    auto start_sequential = std::chrono::high_resolution_clock::now();
+    auto result_sequential = analyzer.Analyze(world, damaged);
+    auto time_sequential = std::chrono::duration<float, std::milli>(
+        std::chrono::high_resolution_clock::now() - start_sequential).count();
+
+    // Test with parallel enabled
+    analyzer.params.use_parallel_mass_calc = true;
+    auto start_parallel = std::chrono::high_resolution_clock::now();
+    auto result_parallel = analyzer.Analyze(world, damaged);
+    auto time_parallel = std::chrono::duration<float, std::milli>(
+        std::chrono::high_resolution_clock::now() - start_parallel).count();
+
+    // Parallel should be faster (or at least not slower)
+    // Note: For small structures, overhead might make it slower
+    std::cout << "[Optimization: Parallel Mass Calculation]\n";
+    std::cout << "  Sequential: " << time_sequential << "ms\n";
+    std::cout << "  Parallel: " << time_parallel << "ms\n";
+    if (time_sequential > time_parallel) {
+        std::cout << "  Speedup: " << (time_sequential / time_parallel) << "x\n";
+    } else {
+        std::cout << "  (Note: Parallel overhead may dominate for small structures)\n";
+    }
+
+    // Both should produce same results
+    EXPECT_EQ(result_sequential.structure_failed, result_parallel.structure_failed);
+    EXPECT_EQ(result_sequential.num_failed_nodes, result_parallel.num_failed_nodes);
+}
+
+TEST_F(StructuralAnalyzerTest, Optimization_EarlyTermination) {
+    // Day 16: Test early termination for obvious failures
+    float voxel_size = world.GetVoxelSize();
+
+    // Create tall unstable tower (will clearly fail)
+    for (int y = 0; y < 20; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    // Remove base
+    world.RemoveVoxel(Vector3(0, 0, 0));
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // With early termination
+    analyzer.params.use_early_termination = true;
+    auto result_early = analyzer.Analyze(world, damaged);
+
+    // Without early termination
+    analyzer.params.use_early_termination = false;
+    auto result_normal = analyzer.Analyze(world, damaged);
+
+    // Early termination should use fewer iterations
+    EXPECT_LE(result_early.iterations_used, result_normal.iterations_used);
+
+    std::cout << "[Optimization: Early Termination]\n";
+    std::cout << "  With early termination: " << result_early.iterations_used << " iterations\n";
+    std::cout << "  Without early termination: " << result_normal.iterations_used << " iterations\n";
+}

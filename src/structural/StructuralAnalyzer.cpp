@@ -4,6 +4,9 @@
 #include <iostream>
 #include <queue>
 #include <algorithm>
+#include <thread>
+#include <future>
+#include <mutex>
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -69,38 +72,37 @@ void StructuralAnalyzer::BuildNodeGraph(const std::vector<Vector3>& damaged_posi
         return;
     }
 
-    // Collect surface voxels near damage
+    // Day 16: OPTIMIZATION - Use influence radius to limit analysis scope
+    // Get all surface voxels first (if using surface-only mode)
+    std::vector<Vector3> all_surface_voxels;
+    if (params.use_surface_only) {
+        // Convert unordered_set to vector
+        auto surface_set = world->GetSurfaceVoxels();
+        all_surface_voxels.assign(surface_set.begin(), surface_set.end());
+    } else {
+        all_surface_voxels = world->GetAllVoxelPositions();
+    }
+
+    // Filter surface voxels to only those within influence radius of any damage
     std::unordered_set<Vector3, Vector3::Hash> surface_voxels;
 
-    // For each damaged position, check neighborhood
-    for (const auto& pos : damaged_positions) {
-        // Check 3x3x3 neighborhood around damage
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    Vector3 check_pos = pos + Vector3(
-                        dx * world->GetVoxelSize(),
-                        dy * world->GetVoxelSize(),
-                        dz * world->GetVoxelSize()
-                    );
-
-                    // If voxel exists and is surface voxel, add it
-                    if (world->HasVoxel(check_pos)) {
-                        if (params.use_surface_only) {
-                            if (world->IsSurfaceVoxel(check_pos)) {
-                                surface_voxels.insert(check_pos);
-                            }
-                        } else {
-                            // Include all voxels if not using surface-only mode
-                            surface_voxels.insert(check_pos);
-                        }
-                    }
-                }
+    for (const auto& surf_pos : all_surface_voxels) {
+        // Check if this surface voxel is within influence radius of any damaged position
+        bool within_radius = false;
+        for (const auto& damage_pos : damaged_positions) {
+            float dist = surf_pos.Distance(damage_pos);
+            if (dist < params.influence_radius) {
+                within_radius = true;
+                break;
             }
+        }
+
+        if (within_radius) {
+            surface_voxels.insert(surf_pos);
         }
     }
 
-    // Create nodes for each surface voxel
+    // Create nodes for each relevant surface voxel
     int id = 0;
     for (const auto& pos : surface_voxels) {
         Voxel voxel = world->GetVoxel(pos);
@@ -124,53 +126,123 @@ void StructuralAnalyzer::BuildNodeGraph(const std::vector<Vector3>& damaged_posi
     }
 
     std::cout << "[StructuralAnalyzer] Built node graph: "
-              << nodes.size() << " nodes, "
-              << surface_voxels.size() << " surface voxels near damage\n";
+              << nodes.size() << " nodes (from " << all_surface_voxels.size()
+              << " total surface voxels, filtered by " << params.influence_radius
+              << "m radius)\n";
 }
 
 void StructuralAnalyzer::CalculateMassSupported() {
-    // For each non-ground node, raycast upward to find supported mass
-    for (auto* node : nodes) {
-        if (node->is_ground_anchor) {
-            node->mass_supported = 0.0f;  // Ground doesn't support weight
-            continue;
+    if (nodes.empty()) {
+        return;
+    }
+
+    // Day 16: OPTIMIZATION - Parallel mass calculation
+    if (params.use_parallel_mass_calc && nodes.size() > 100) {
+        // Use multi-threading for large node counts
+        const int num_threads = std::min(4, static_cast<int>(std::thread::hardware_concurrency()));
+        std::vector<std::future<void>> futures;
+        std::mutex cache_mutex;  // Protect cache access
+
+        int nodes_per_thread = static_cast<int>(nodes.size()) / num_threads;
+
+        for (int t = 0; t < num_threads; t++) {
+            int start_idx = t * nodes_per_thread;
+            int end_idx = (t == num_threads - 1) ? static_cast<int>(nodes.size()) : (t + 1) * nodes_per_thread;
+
+            futures.push_back(std::async(std::launch::async, [this, start_idx, end_idx, &cache_mutex]() {
+                float voxel_size = world->GetVoxelSize();
+                float voxel_volume = voxel_size * voxel_size * voxel_size;
+
+                for (int i = start_idx; i < end_idx; i++) {
+                    auto* node = nodes[i];
+
+                    if (node->is_ground_anchor) {
+                        node->mass_supported = 0.0f;
+                        continue;
+                    }
+
+                    // Check cache (thread-safe)
+                    {
+                        std::lock_guard<std::mutex> lock(cache_mutex);
+                        auto cache_it = mass_cache.find(node->position);
+                        if (cache_it != mass_cache.end()) {
+                            node->mass_supported = cache_it->second;
+                            cache_hits++;
+                            continue;
+                        }
+                        cache_misses++;
+                    }
+
+                    // Raycast upward
+                    Vector3 ray_origin = node->position;
+                    Vector3 ray_direction(0, 1, 0);
+                    float max_distance = 100.0f;
+                    float total_mass = 0.0f;
+
+                    for (float dist = voxel_size; dist < max_distance; dist += voxel_size) {
+                        Vector3 check_pos = ray_origin + ray_direction * dist;
+
+                        if (world->HasVoxel(check_pos)) {
+                            Voxel voxel = world->GetVoxel(check_pos);
+                            const Material& mat = g_materials.GetMaterial(voxel.material_id);
+                            total_mass += mat.density * voxel_volume;
+                        }
+                    }
+
+                    node->mass_supported = total_mass;
+
+                    // Update cache (thread-safe)
+                    {
+                        std::lock_guard<std::mutex> lock(cache_mutex);
+                        mass_cache[node->position] = total_mass;
+                    }
+                }
+            }));
         }
 
-        // Check cache first (Day 12: Track cache performance)
-        auto cache_it = mass_cache.find(node->position);
-        if (cache_it != mass_cache.end()) {
-            node->mass_supported = cache_it->second;
-            cache_hits++;
-            continue;
+        // Wait for all threads to complete
+        for (auto& future : futures) {
+            future.wait();
         }
-
-        // Cache miss
-        cache_misses++;
-
-        // Raycast upward
-        Vector3 ray_origin = node->position;
-        Vector3 ray_direction(0, 1, 0);  // Up
-        float max_distance = 100.0f;
-
-        float total_mass = 0.0f;
-        float voxel_size = world->GetVoxelSize();
-        float voxel_volume = voxel_size * voxel_size * voxel_size;
-
-        // Simple approach: check voxels directly above
-        for (float dist = voxel_size; dist < max_distance; dist += voxel_size) {
-            Vector3 check_pos = ray_origin + ray_direction * dist;
-
-            if (world->HasVoxel(check_pos)) {
-                Voxel voxel = world->GetVoxel(check_pos);
-                const Material& mat = g_materials.GetMaterial(voxel.material_id);
-
-                float voxel_mass = mat.density * voxel_volume;
-                total_mass += voxel_mass;
+    } else {
+        // Sequential version for small node counts
+        for (auto* node : nodes) {
+            if (node->is_ground_anchor) {
+                node->mass_supported = 0.0f;
+                continue;
             }
-        }
 
-        node->mass_supported = total_mass;
-        mass_cache[node->position] = total_mass;
+            // Check cache
+            auto cache_it = mass_cache.find(node->position);
+            if (cache_it != mass_cache.end()) {
+                node->mass_supported = cache_it->second;
+                cache_hits++;
+                continue;
+            }
+
+            cache_misses++;
+
+            // Raycast upward
+            Vector3 ray_origin = node->position;
+            Vector3 ray_direction(0, 1, 0);
+            float max_distance = 100.0f;
+            float total_mass = 0.0f;
+            float voxel_size = world->GetVoxelSize();
+            float voxel_volume = voxel_size * voxel_size * voxel_size;
+
+            for (float dist = voxel_size; dist < max_distance; dist += voxel_size) {
+                Vector3 check_pos = ray_origin + ray_direction * dist;
+
+                if (world->HasVoxel(check_pos)) {
+                    Voxel voxel = world->GetVoxel(check_pos);
+                    const Material& mat = g_materials.GetMaterial(voxel.material_id);
+                    total_mass += mat.density * voxel_volume;
+                }
+            }
+
+            node->mass_supported = total_mass;
+            mass_cache[node->position] = total_mass;
+        }
     }
 }
 
@@ -247,12 +319,14 @@ bool StructuralAnalyzer::CheckConvergence() const {
 
 bool StructuralAnalyzer::SolveDisplacements() {
     iteration_count = 0;
+    float prev_max_change = 0.0f;
 
     for (int i = 0; i < params.max_iterations; i++) {
         iteration_count++;
 
         // Day 13: Track maximum displacement change for convergence
         float max_displacement_change = 0.0f;
+        float max_displacement_value = 0.0f;
 
         // Store old displacements before update
         std::vector<float> old_displacements;
@@ -270,6 +344,34 @@ bool StructuralAnalyzer::SolveDisplacements() {
         for (size_t j = 0; j < nodes.size(); j++) {
             float change = std::abs(nodes[j]->displacement - old_displacements[j]);
             max_displacement_change = std::max(max_displacement_change, change);
+            max_displacement_value = std::max(max_displacement_value, std::abs(nodes[j]->displacement));
+        }
+
+        // Day 16: OPTIMIZATION - Early termination for obvious failures
+        if (params.use_early_termination) {
+            // Early termination 1: Obvious structural failure (displacement > 10m = clearly failing)
+            if (max_displacement_value > 10.0f) {
+                std::cout << "[StructuralAnalyzer] Early failure detection at iteration " << iteration_count
+                          << " (displacement: " << max_displacement_value << "m)\n";
+                return false;
+            }
+
+            // Early termination 2: Oscillating/stuck (change not decreasing)
+            if (i > 20 && std::abs(max_displacement_change - prev_max_change) < 0.00001f) {
+                std::cout << "[StructuralAnalyzer] Oscillation detected at iteration " << iteration_count
+                          << ", assuming non-convergence\n";
+                return false;
+            }
+
+            // Early termination 3: NaN or infinite values (numerical instability)
+            for (const auto* node : nodes) {
+                if (std::isnan(node->displacement) || std::isinf(node->displacement) ||
+                    std::isnan(node->velocity) || std::isinf(node->velocity)) {
+                    std::cout << "[StructuralAnalyzer] Numerical instability detected at iteration "
+                              << iteration_count << "\n";
+                    return false;
+                }
+            }
         }
 
         // Day 13: Convergence based on displacement change (more stable than velocity)
@@ -285,6 +387,8 @@ bool StructuralAnalyzer::SolveDisplacements() {
                       << " iterations (velocity threshold)\n";
             return true;
         }
+
+        prev_max_change = max_displacement_change;
     }
 
     std::cout << "[StructuralAnalyzer] Did not converge (max iterations reached)\n";

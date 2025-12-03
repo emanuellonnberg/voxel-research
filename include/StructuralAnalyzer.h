@@ -185,6 +185,9 @@ public:
         float convergence_threshold;    // Convergence check (default 0.0001m)
         float ground_level;             // Ground plane Y (default 0.0)
         bool use_surface_only;          // Analyze only surface voxels (default true)
+        float influence_radius;         // Radius around damage to analyze (Day 16, default 5.0m)
+        bool use_parallel_mass_calc;    // Use multi-threading for mass calculation (Day 16)
+        bool use_early_termination;     // Enable early termination optimizations (Day 16)
 
         Parameters()
             : timestep(0.01f)
@@ -193,6 +196,9 @@ public:
             , convergence_threshold(0.0001f)
             , ground_level(0.0f)
             , use_surface_only(true)
+            , influence_radius(5.0f)
+            , use_parallel_mass_calc(true)
+            , use_early_termination(false)  // Day 16: Disabled by default (too aggressive)
         {}
     };
 

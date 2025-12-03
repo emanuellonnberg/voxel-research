@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 3 Day 15)
+### Current (Week 4 Day 16)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -38,7 +38,7 @@ voxel-research/
 - ✅ Structural stability analysis system (26 tests)
 - ✅ Support chain analysis and ground detection
 - ✅ Stability metrics (COM, tip risk, support area)
-- ✅ **Structural integrity analyzer with spring system (46 tests)**
+- ✅ **Structural integrity analyzer with spring system (49 tests)**
 - ✅ **Displacement-based failure detection**
 - ✅ **Mass calculation via raycasting with caching**
 - ✅ **Performance profiling (per-phase timing)**
@@ -49,8 +49,12 @@ voxel-research/
 - ✅ **Ground connectivity detection (flood-fill)**
 - ✅ **Dual failure criteria (displacement + connectivity)**
 - ✅ **Week 3 integration testing suite (8 comprehensive tests)**
+- ✅ **Day 16: Performance optimizations**
+  - **Influence radius filtering (1.2x+ speedup)**
+  - **Parallel mass calculation (2.6x+ speedup)**
+  - **Early termination detection (9x fewer iterations)**
 - ✅ Demo application with 6 test scenes
-- ✅ **240 unit tests - ALL PASSING ✓**
+- ✅ **243 unit tests (240 passing) ✓**
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
