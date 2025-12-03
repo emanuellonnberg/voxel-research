@@ -439,10 +439,10 @@ Comprehensive design documentation available in `/docs`:
 
 This is a research prototype following a structured 8-week development plan. See `docs/8_week_sprint_plan.md` for the detailed roadmap.
 
+## Author
+
+- Emanuel Lönnberg
+
 ## License
 
-[To be determined]
-
-## Contact
-
-[Your contact information]
+This project is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License. See the [LICENSE](LICENSE) file for details.
