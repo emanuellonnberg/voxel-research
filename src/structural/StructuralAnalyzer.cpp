@@ -7,6 +7,8 @@
 #include <thread>
 #include <future>
 #include <mutex>
+#include <fstream>
+#include <sstream>
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -595,4 +597,109 @@ AnalysisResult StructuralAnalyzer::Analyze(
               << (result.structure_failed ? "FAILED" : "STABLE") << "\n";
 
     return result;
+}
+
+// ============================================================================
+// Day 17: Parameter Save/Load System
+// ============================================================================
+
+bool StructuralAnalyzer::SaveParameters(const std::string& filename) const {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "[StructuralAnalyzer] Failed to open file for writing: " << filename << "\n";
+        return false;
+    }
+
+    file << "[StructuralAnalyzer]\n";
+    file << "timestep=" << params.timestep << "\n";
+    file << "damping=" << params.damping << "\n";
+    file << "max_iterations=" << params.max_iterations << "\n";
+    file << "convergence_threshold=" << params.convergence_threshold << "\n";
+    file << "ground_level=" << params.ground_level << "\n";
+    file << "use_surface_only=" << (params.use_surface_only ? 1 : 0) << "\n";
+    file << "influence_radius=" << params.influence_radius << "\n";
+    file << "use_parallel_mass_calc=" << (params.use_parallel_mass_calc ? 1 : 0) << "\n";
+    file << "use_early_termination=" << (params.use_early_termination ? 1 : 0) << "\n";
+
+    file.close();
+    std::cout << "[StructuralAnalyzer] Parameters saved to: " << filename << "\n";
+    return true;
+}
+
+bool StructuralAnalyzer::LoadParameters(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "[StructuralAnalyzer] Failed to open file for reading: " << filename << "\n";
+        return false;
+    }
+
+    std::string line;
+    bool found_section = false;
+
+    while (std::getline(file, line)) {
+        // Trim whitespace
+        line.erase(0, line.find_first_not_of(" \t\r\n"));
+        line.erase(line.find_last_not_of(" \t\r\n") + 1);
+
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+
+        // Check for section header
+        if (line == "[StructuralAnalyzer]") {
+            found_section = true;
+            continue;
+        }
+
+        // Parse key=value pairs
+        if (found_section) {
+            size_t equals_pos = line.find('=');
+            if (equals_pos == std::string::npos) {
+                continue;
+            }
+
+            std::string key = line.substr(0, equals_pos);
+            std::string value = line.substr(equals_pos + 1);
+
+            // Trim key and value
+            key.erase(0, key.find_first_not_of(" \t"));
+            key.erase(key.find_last_not_of(" \t") + 1);
+            value.erase(0, value.find_first_not_of(" \t"));
+            value.erase(value.find_last_not_of(" \t") + 1);
+
+            // Parse values
+            if (key == "timestep") {
+                params.timestep = std::stof(value);
+            } else if (key == "damping") {
+                params.damping = std::stof(value);
+            } else if (key == "max_iterations") {
+                params.max_iterations = std::stoi(value);
+            } else if (key == "convergence_threshold") {
+                params.convergence_threshold = std::stof(value);
+            } else if (key == "ground_level") {
+                params.ground_level = std::stof(value);
+            } else if (key == "use_surface_only") {
+                params.use_surface_only = (std::stoi(value) != 0);
+            } else if (key == "influence_radius") {
+                params.influence_radius = std::stof(value);
+            } else if (key == "use_parallel_mass_calc") {
+                params.use_parallel_mass_calc = (std::stoi(value) != 0);
+            } else if (key == "use_early_termination") {
+                params.use_early_termination = (std::stoi(value) != 0);
+            } else {
+                std::cerr << "[StructuralAnalyzer] Unknown parameter: " << key << "\n";
+            }
+        }
+    }
+
+    file.close();
+
+    if (!found_section) {
+        std::cerr << "[StructuralAnalyzer] No [StructuralAnalyzer] section found in: " << filename << "\n";
+        return false;
+    }
+
+    std::cout << "[StructuralAnalyzer] Parameters loaded from: " << filename << "\n";
+    return true;
 }

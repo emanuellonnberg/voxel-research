@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 4 Day 16)
+### Current (Week 4 Day 17)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -53,8 +53,14 @@ voxel-research/
   - **Influence radius filtering (1.2x+ speedup)**
   - **Parallel mass calculation (2.6x+ speedup)**
   - **Early termination detection (9x fewer iterations)**
+- ✅ **Day 17: Parameter tuning system**
+  - **INI file save/load for parameters**
+  - **Parameter sensitivity analysis tools**
+  - **Auto-tuning with grid search**
+  - **Optimal parameter configurations (default + optimal)**
+  - **CSV export for analysis results**
 - ✅ Demo application with 6 test scenes
-- ✅ **243 unit tests (240 passing) ✓**
+- ✅ **252 unit tests (249 passing) ✓**
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)

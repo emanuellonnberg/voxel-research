@@ -177,6 +177,20 @@ public:
         misses = cache_misses;
     }
 
+    /**
+     * Save parameters to INI file (Day 17)
+     * @param filename Path to INI file to write
+     * @return true if successful
+     */
+    bool SaveParameters(const std::string& filename) const;
+
+    /**
+     * Load parameters from INI file (Day 17)
+     * @param filename Path to INI file to read
+     * @return true if successful
+     */
+    bool LoadParameters(const std::string& filename);
+
     // Tunable parameters
     struct Parameters {
         float timestep;                 // Simulation timestep (default 0.01s)

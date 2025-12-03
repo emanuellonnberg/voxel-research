@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 #include "StructuralAnalyzer.h"
+#include "ParameterTuning.h"
 #include "VoxelWorld.h"
 #include "VoxelUtils.h"
 #include "Material.h"
+#include <fstream>
 
 class StructuralAnalyzerTest : public ::testing::Test {
 protected:
@@ -1320,4 +1322,286 @@ TEST_F(StructuralAnalyzerTest, Optimization_EarlyTermination) {
     std::cout << "[Optimization: Early Termination]\n";
     std::cout << "  With early termination: " << result_early.iterations_used << " iterations\n";
     std::cout << "  Without early termination: " << result_normal.iterations_used << " iterations\n";
+}
+
+// ============================================================================
+// DAY 17: Parameter Tuning System Tests
+// ============================================================================
+
+TEST_F(StructuralAnalyzerTest, ParameterSaveLoad_SaveCreatesValidFile) {
+    // Day 17: Test saving parameters to INI file
+    std::string test_file = "/tmp/test_params.ini";
+
+    // Set custom parameters
+    analyzer.params.timestep = 0.02f;
+    analyzer.params.damping = 0.95f;
+    analyzer.params.max_iterations = 150;
+    analyzer.params.convergence_threshold = 0.0002f;
+    analyzer.params.ground_level = -1.0f;
+    analyzer.params.use_surface_only = false;
+    analyzer.params.influence_radius = 10.0f;
+    analyzer.params.use_parallel_mass_calc = false;
+    analyzer.params.use_early_termination = true;
+
+    // Save parameters
+    bool save_success = analyzer.SaveParameters(test_file);
+    EXPECT_TRUE(save_success);
+
+    // Verify file exists and is readable
+    std::ifstream file(test_file);
+    EXPECT_TRUE(file.is_open());
+
+    // Verify content format
+    std::string line;
+    bool found_section = false;
+    bool found_timestep = false;
+    while (std::getline(file, line)) {
+        if (line == "[StructuralAnalyzer]") found_section = true;
+        if (line.find("timestep=") != std::string::npos) found_timestep = true;
+    }
+    file.close();
+
+    EXPECT_TRUE(found_section);
+    EXPECT_TRUE(found_timestep);
+
+    std::cout << "[ParameterSaveLoad: SaveCreatesValidFile] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterSaveLoad_LoadRestoresValues) {
+    // Day 17: Test loading parameters from INI file
+    std::string test_file = "/tmp/test_load_params.ini";
+
+    // Create test INI file
+    std::ofstream file(test_file);
+    file << "[StructuralAnalyzer]\n";
+    file << "timestep=0.025\n";
+    file << "damping=0.85\n";
+    file << "max_iterations=200\n";
+    file << "convergence_threshold=0.0005\n";
+    file << "ground_level=1.5\n";
+    file << "use_surface_only=0\n";
+    file << "influence_radius=15.0\n";
+    file << "use_parallel_mass_calc=0\n";
+    file << "use_early_termination=1\n";
+    file.close();
+
+    // Load parameters
+    bool load_success = analyzer.LoadParameters(test_file);
+    EXPECT_TRUE(load_success);
+
+    // Verify values were loaded correctly
+    EXPECT_FLOAT_EQ(analyzer.params.timestep, 0.025f);
+    EXPECT_FLOAT_EQ(analyzer.params.damping, 0.85f);
+    EXPECT_EQ(analyzer.params.max_iterations, 200);
+    EXPECT_FLOAT_EQ(analyzer.params.convergence_threshold, 0.0005f);
+    EXPECT_FLOAT_EQ(analyzer.params.ground_level, 1.5f);
+    EXPECT_FALSE(analyzer.params.use_surface_only);
+    EXPECT_FLOAT_EQ(analyzer.params.influence_radius, 15.0f);
+    EXPECT_FALSE(analyzer.params.use_parallel_mass_calc);
+    EXPECT_TRUE(analyzer.params.use_early_termination);
+
+    std::cout << "[ParameterSaveLoad: LoadRestoresValues] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterSaveLoad_RoundTripPreservesValues) {
+    // Day 17: Test that save->load preserves all values
+    std::string test_file = "/tmp/test_roundtrip.ini";
+
+    // Set unique values for all parameters
+    analyzer.params.timestep = 0.0123f;
+    analyzer.params.damping = 0.777f;
+    analyzer.params.max_iterations = 123;
+    analyzer.params.convergence_threshold = 0.000123f;
+    analyzer.params.ground_level = -2.5f;
+    analyzer.params.use_surface_only = true;
+    analyzer.params.influence_radius = 7.5f;
+    analyzer.params.use_parallel_mass_calc = true;
+    analyzer.params.use_early_termination = false;
+
+    // Save
+    EXPECT_TRUE(analyzer.SaveParameters(test_file));
+
+    // Change values
+    analyzer.params.timestep = 0.999f;
+    analyzer.params.max_iterations = 999;
+    analyzer.params.use_surface_only = false;
+
+    // Load
+    EXPECT_TRUE(analyzer.LoadParameters(test_file));
+
+    // Verify original values restored
+    EXPECT_FLOAT_EQ(analyzer.params.timestep, 0.0123f);
+    EXPECT_FLOAT_EQ(analyzer.params.damping, 0.777f);
+    EXPECT_EQ(analyzer.params.max_iterations, 123);
+    EXPECT_FLOAT_EQ(analyzer.params.convergence_threshold, 0.000123f);
+    EXPECT_FLOAT_EQ(analyzer.params.ground_level, -2.5f);
+    EXPECT_TRUE(analyzer.params.use_surface_only);
+    EXPECT_FLOAT_EQ(analyzer.params.influence_radius, 7.5f);
+    EXPECT_TRUE(analyzer.params.use_parallel_mass_calc);
+    EXPECT_FALSE(analyzer.params.use_early_termination);
+
+    std::cout << "[ParameterSaveLoad: RoundTripPreservesValues] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterSaveLoad_LoadMissingFileReturnsFalse) {
+    // Day 17: Test that loading missing file fails gracefully
+    std::string missing_file = "/tmp/nonexistent_params.ini";
+
+    bool load_success = analyzer.LoadParameters(missing_file);
+    EXPECT_FALSE(load_success);
+
+    std::cout << "[ParameterSaveLoad: LoadMissingFileReturnsFalse] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterSaveLoad_LoadDefaultConfig) {
+    // Day 17: Test loading the default config file
+    std::string default_file = "../config/default_params.ini";
+
+    // Load default parameters
+    bool load_success = analyzer.LoadParameters(default_file);
+    EXPECT_TRUE(load_success);
+
+    // Verify default values match what we expect
+    EXPECT_FLOAT_EQ(analyzer.params.timestep, 0.01f);
+    EXPECT_FLOAT_EQ(analyzer.params.damping, 0.9f);
+    EXPECT_EQ(analyzer.params.max_iterations, 100);
+    EXPECT_FLOAT_EQ(analyzer.params.convergence_threshold, 0.0001f);
+    EXPECT_FLOAT_EQ(analyzer.params.ground_level, 0.0f);
+    EXPECT_TRUE(analyzer.params.use_surface_only);
+    EXPECT_FLOAT_EQ(analyzer.params.influence_radius, 5.0f);
+    EXPECT_TRUE(analyzer.params.use_parallel_mass_calc);
+    EXPECT_FALSE(analyzer.params.use_early_termination);
+
+    std::cout << "[ParameterSaveLoad: LoadDefaultConfig] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterTuning_SensitivityAnalysis) {
+    // Day 17: Test parameter sensitivity analysis
+    float voxel_size = world.GetVoxelSize();
+
+    // Build test structure (tower)
+    for (int y = 0; y < 6; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Damage middle
+    Vector3 damage_pos(0, 3 * voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    // Test timestep sensitivity
+    std::vector<float> timestep_values = {0.005f, 0.01f, 0.02f, 0.03f};
+    auto result = ParameterTuning::AnalyzeParameterSensitivity(
+        analyzer, world, damaged, "timestep", timestep_values);
+
+    // Verify results
+    EXPECT_EQ(result.parameter_name, "timestep");
+    EXPECT_EQ(result.test_values.size(), timestep_values.size());
+    EXPECT_EQ(result.calculation_times_ms.size(), timestep_values.size());
+    EXPECT_GT(result.min_time_ms, 0.0f);
+    EXPECT_GT(result.max_time_ms, 0.0f);
+    EXPECT_GE(result.max_time_ms, result.min_time_ms);
+    EXPECT_FALSE(result.analysis_summary.empty());
+
+    std::cout << "[ParameterTuning: SensitivityAnalysis] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterTuning_InfluenceRadiusSensitivity) {
+    // Day 17: Test influence radius sensitivity
+    float voxel_size = world.GetVoxelSize();
+
+    // Build larger structure
+    for (int x = 0; x < 5; x++) {
+        for (int y = 0; y < 4; y++) {
+            world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, 0), Voxel(brick_id));
+        }
+    }
+
+    Vector3 damage_pos(2 * voxel_size, 0, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    // Test different influence radii
+    std::vector<float> radius_values = {1.0f, 3.0f, 5.0f, 10.0f};
+    auto result = ParameterTuning::AnalyzeParameterSensitivity(
+        analyzer, world, damaged, "influence_radius", radius_values);
+
+    // Larger radius should analyze more nodes (usually)
+    EXPECT_EQ(result.nodes_analyzed.size(), radius_values.size());
+
+    // Should find an optimal value
+    EXPECT_GT(result.optimal_value, 0.0f);
+
+    std::cout << "[ParameterTuning: InfluenceRadiusSensitivity] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterTuning_AutoTune) {
+    // Day 17: Test auto-tuning with grid search
+    float voxel_size = world.GetVoxelSize();
+
+    // Build test structure
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    Vector3 damage_pos(0, 2 * voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    // Run auto-tuning (limited iterations for speed)
+    auto result = ParameterTuning::AutoTuneParameters(world, damaged, 20);
+
+    // Verify results
+    EXPECT_GT(result.total_tests_run, 0);
+    EXPECT_LE(result.total_tests_run, 20);
+    EXPECT_EQ(result.tuning_method, "grid_search");
+    EXPECT_FALSE(result.summary.empty());
+
+    // Optimal parameters should be valid
+    EXPECT_GT(result.optimal_params.timestep, 0.0f);
+    EXPECT_GT(result.optimal_params.damping, 0.0f);
+    EXPECT_GT(result.optimal_params.max_iterations, 0);
+    EXPECT_GT(result.optimal_params.influence_radius, 0.0f);
+
+    std::cout << "[ParameterTuning: AutoTune] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, ParameterTuning_SaveSensitivityCSV) {
+    // Day 17: Test saving sensitivity results to CSV
+    float voxel_size = world.GetVoxelSize();
+
+    // Build simple structure
+    for (int y = 0; y < 4; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    Vector3 damage_pos(0, 1 * voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    // Run sensitivity analysis
+    std::vector<float> damping_values = {0.8f, 0.9f, 0.95f};
+    auto result = ParameterTuning::AnalyzeParameterSensitivity(
+        analyzer, world, damaged, "damping", damping_values);
+
+    // Save to CSV
+    std::string csv_file = "/tmp/test_sensitivity.csv";
+    bool save_success = ParameterTuning::SaveSensitivityResultsCSV(result, csv_file);
+    EXPECT_TRUE(save_success);
+
+    // Verify file exists and has content
+    std::ifstream file(csv_file);
+    EXPECT_TRUE(file.is_open());
+
+    std::string line;
+    int line_count = 0;
+    while (std::getline(file, line)) {
+        line_count++;
+    }
+    file.close();
+
+    // Should have header + data rows
+    EXPECT_EQ(line_count, 1 + static_cast<int>(damping_values.size()));
+
+    std::cout << "[ParameterTuning: SaveSensitivityCSV] SUCCESS\n";
 }

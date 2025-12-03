@@ -105,6 +105,7 @@ add_library(VoxelCore
 
     # Structural analysis (Week 3-4)
     src/structural/StructuralAnalyzer.cpp
+    src/structural/ParameterTuning.cpp
 
     # Physics (Week 5-6)
     # src/physics/PhysicsSystem.cpp
