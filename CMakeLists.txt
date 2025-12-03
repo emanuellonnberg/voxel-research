@@ -126,8 +126,9 @@ add_library(VoxelCore
     src/structural/StructuralAnalyzer.cpp
     src/structural/ParameterTuning.cpp
 
-    # Physics (Week 5 Day 22)
+    # Physics (Week 5 Day 22-23)
     $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
+    src/physics/VoxelPhysicsIntegration.cpp
 )
 
 target_include_directories(VoxelCore PUBLIC
@@ -165,6 +166,7 @@ if(BUILD_TESTS)
         tests/test_VoxelStability.cpp
         tests/test_StructuralAnalyzer.cpp
         tests/test_PhysicsEngine.cpp
+        tests/test_VoxelPhysicsIntegration.cpp
     )
 
     target_link_libraries(VoxelTests
