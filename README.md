@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 4 Day 18)
+### Current (Week 4 Day 19)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -67,8 +67,23 @@ voxel-research/
   - **Empty damage list handling**
   - **Invalid parameter protection (negative/zero/excessive values)**
   - **Comprehensive edge case test suite (12 tests)**
+- ✅ **Day 19: Documentation & integration prep**
+  - **Complete API documentation (StructuralAnalyzer)**
+  - **Practical usage guide with code examples**
+  - **Parameter tuning guide (manual + automated)**
+  - **PhysX integration guide**
+  - **4 comprehensive documentation files**
 - ✅ Demo application with 6 test scenes
 - ✅ **264 unit tests (258 passing) ✓**
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[API Documentation](docs/STRUCTURAL_ANALYZER_API.md)** - Complete StructuralAnalyzer API reference
+- **[Usage Guide](docs/USAGE_GUIDE.md)** - Practical examples and integration patterns
+- **[Parameter Tuning Guide](docs/PARAMETER_TUNING_GUIDE.md)** - Optimize performance and accuracy
+- **[PhysX Integration Guide](docs/PHYSX_INTEGRATION_GUIDE.md)** - Connect with NVIDIA PhysX physics engine
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
