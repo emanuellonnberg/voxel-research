@@ -425,8 +425,9 @@ std::vector<SpringNode*> StructuralAnalyzer::FindFloatingNodes() {
         queue.pop();
 
         for (auto* neighbor : current->neighbors) {
-            // Only traverse through non-failed neighbors
-            if (!neighbor->has_failed && grounded.find(neighbor) == grounded.end()) {
+            // Day 20 fix: Traverse through ALL neighbors, even if they have displacement failures
+            // Ground connectivity is independent of material failure
+            if (grounded.find(neighbor) == grounded.end()) {
                 grounded.insert(neighbor);
                 queue.push(neighbor);
             }
@@ -601,9 +602,39 @@ AnalysisResult StructuralAnalyzer::Analyze(
         return result;
     }
 
+    // Step 2.5: Early ground connectivity check (Day 20 fix)
+    // Detect floating nodes BEFORE running solver to avoid numerical instability
+    auto floating_nodes = FindFloatingNodes();
+
+    // Partition nodes into grounded vs floating
+    std::vector<SpringNode*> grounded_nodes;
+    for (auto* node : nodes) {
+        if (!node->is_disconnected) {
+            grounded_nodes.push_back(node);
+        }
+    }
+
+    // Debug logging for partitioning
+    if (!floating_nodes.empty()) {
+        std::cout << "[StructuralAnalyzer] Partitioned: " << grounded_nodes.size()
+                  << " grounded, " << floating_nodes.size() << " floating\n";
+    }
+
     // Step 3: Solve for displacements (Day 12: Profile this step)
+    // Only run solver on grounded nodes to avoid numerical explosion
     auto start_solver = Clock::now();
-    result.converged = SolveDisplacements();
+    if (!grounded_nodes.empty()) {
+        // Has ground support - safe to run solver
+        // Temporarily swap node list to solve only grounded portion
+        auto original_nodes = nodes;
+        nodes = grounded_nodes;
+        result.converged = SolveDisplacements();
+        nodes = original_nodes;  // Restore full node list
+    } else {
+        // All nodes floating - skip solver entirely
+        result.converged = false;
+        iteration_count = 0;
+    }
     result.iterations_used = iteration_count;
     result.solver_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_solver).count();
 
