@@ -167,6 +167,7 @@ if(BUILD_TESTS)
         tests/test_StructuralAnalyzer.cpp
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
+        tests/test_Integration.cpp
     )
 
     target_link_libraries(VoxelTests
@@ -189,6 +190,17 @@ if(BUILD_EXAMPLES)
         examples/benchmark_structural_analysis.cpp
     )
     target_link_libraries(BenchmarkStructuralAnalysis VoxelCore)
+
+    # Day 24: Integration demo
+    add_executable(IntegrationDemo
+        examples/demo_integration.cpp
+    )
+    target_link_libraries(IntegrationDemo VoxelCore)
+
+    # Define USE_BULLET for demo if enabled
+    if(USE_BULLET)
+        target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
+    endif()
 endif()
 
 # Print configuration
