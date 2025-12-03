@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <chrono>
 #include "VoxelWorld.h"
 #include "Material.h"
 
@@ -364,4 +365,179 @@ TEST_F(VoxelWorldTest, LargeStructure) {
     // Test neighbor queries (should be fast)
     auto neighbors = world.GetNeighbors(test_pos, Connectivity::SIX);
     EXPECT_EQ(neighbors.size(), 6);  // Interior voxel has all 6 neighbors
+}
+
+// Surface detection tests
+TEST_F(VoxelWorldTest, IsSurfaceVoxel_Single) {
+    // Single voxel is always surface (surrounded by air)
+    Vector3 pos(0, 0, 0);
+    world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
+
+    EXPECT_TRUE(world.IsSurfaceVoxel(pos));
+}
+
+TEST_F(VoxelWorldTest, IsSurfaceVoxel_Interior) {
+    // Create 3x3x3 cube
+    for (int x = 0; x < 3; x++) {
+        for (int y = 0; y < 3; y++) {
+            for (int z = 0; z < 3; z++) {
+                Vector3 pos(x * voxel_size, y * voxel_size, z * voxel_size);
+                world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
+            }
+        }
+    }
+
+    // Center voxel is interior (completely surrounded)
+    Vector3 center(voxel_size, voxel_size, voxel_size);
+    EXPECT_FALSE(world.IsSurfaceVoxel(center));
+}
+
+TEST_F(VoxelWorldTest, IsSurfaceVoxel_Edge) {
+    // Create 3x3x3 cube
+    for (int x = 0; x < 3; x++) {
+        for (int y = 0; y < 3; y++) {
+            for (int z = 0; z < 3; z++) {
+                Vector3 pos(x * voxel_size, y * voxel_size, z * voxel_size);
+                world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
+            }
+        }
+    }
+
+    // Corner voxel is surface
+    Vector3 corner(0, 0, 0);
+    EXPECT_TRUE(world.IsSurfaceVoxel(corner));
+
+    // Edge voxel is surface
+    Vector3 edge(0, voxel_size, voxel_size);
+    EXPECT_TRUE(world.IsSurfaceVoxel(edge));
+}
+
+TEST_F(VoxelWorldTest, GetSurfaceVoxels_Single) {
+    Vector3 pos(0, 0, 0);
+    world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
+
+    auto& surface = world.GetSurfaceVoxels();
+    EXPECT_EQ(surface.size(), 1);
+    EXPECT_TRUE(surface.count(pos) > 0);
+}
+
+TEST_F(VoxelWorldTest, GetSurfaceVoxels_Cube) {
+    // Create 3x3x3 cube = 27 voxels
+    for (int x = 0; x < 3; x++) {
+        for (int y = 0; y < 3; y++) {
+            for (int z = 0; z < 3; z++) {
+                Vector3 pos(x * voxel_size, y * voxel_size, z * voxel_size);
+                world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
+            }
+        }
+    }
+
+    auto& surface = world.GetSurfaceVoxels();
+
+    // Only center voxel is interior, rest are surface
+    // 27 total - 1 interior = 26 surface
+    EXPECT_EQ(surface.size(), 26);
+
+    // Verify center is NOT in surface
+    Vector3 center(voxel_size, voxel_size, voxel_size);
+    EXPECT_FALSE(surface.count(center) > 0);
+
+    // Verify a corner IS in surface
+    Vector3 corner(0, 0, 0);
+    EXPECT_TRUE(surface.count(corner) > 0);
+}
+
+TEST_F(VoxelWorldTest, SurfaceCache_Caching) {
+    // Create structure
+    for (int x = 0; x < 5; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+    }
+
+    // First call should populate cache
+    auto& surface1 = world.GetSurfaceVoxels();
+    size_t count1 = surface1.size();
+
+    // Second call should return same cached result (same address)
+    auto& surface2 = world.GetSurfaceVoxels();
+    EXPECT_EQ(&surface1, &surface2);  // Same reference
+    EXPECT_EQ(count1, surface2.size());
+}
+
+TEST_F(VoxelWorldTest, SurfaceCache_Invalidation) {
+    // Create initial structure
+    world.SetVoxel(Vector3(0, 0, 0), Voxel(MaterialDatabase::BRICK));
+    world.SetVoxel(Vector3(voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+
+    auto& surface1 = world.GetSurfaceVoxels();
+    EXPECT_EQ(surface1.size(), 2);  // Both are surface
+
+    // Add voxel - should invalidate cache
+    world.SetVoxel(Vector3(2 * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+
+    auto& surface2 = world.GetSurfaceVoxels();
+    EXPECT_EQ(surface2.size(), 3);  // All three are surface
+}
+
+TEST_F(VoxelWorldTest, SurfaceCache_InvalidationOnRemove) {
+    // Create 3x1x1 line
+    world.SetVoxel(Vector3(0, 0, 0), Voxel(MaterialDatabase::BRICK));
+    world.SetVoxel(Vector3(voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+    world.SetVoxel(Vector3(2 * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+
+    auto& surface1 = world.GetSurfaceVoxels();
+    EXPECT_EQ(surface1.size(), 3);  // All surface
+
+    // Remove middle voxel
+    world.RemoveVoxel(Vector3(voxel_size, 0, 0));
+
+    auto& surface2 = world.GetSurfaceVoxels();
+    EXPECT_EQ(surface2.size(), 2);  // Two remaining voxels are surface
+}
+
+TEST_F(VoxelWorldTest, SurfaceCache_InvalidationOnClear) {
+    // Create structure
+    for (int i = 0; i < 5; i++) {
+        world.SetVoxel(Vector3(i * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+    }
+
+    auto& surface1 = world.GetSurfaceVoxels();
+    EXPECT_GT(surface1.size(), 0);
+
+    // Clear world
+    world.Clear();
+
+    auto& surface2 = world.GetSurfaceVoxels();
+    EXPECT_EQ(surface2.size(), 0);  // No voxels = no surface
+}
+
+TEST_F(VoxelWorldTest, SurfaceDetection_Performance) {
+    // Create larger structure (10x10x10 = 1000 voxels)
+    for (int x = 0; x < 10; x++) {
+        for (int y = 0; y < 10; y++) {
+            for (int z = 0; z < 10; z++) {
+                Vector3 pos(x * voxel_size, y * voxel_size, z * voxel_size);
+                world.SetVoxel(pos, Voxel(MaterialDatabase::CONCRETE));
+            }
+        }
+    }
+
+    // First call (cache miss) - populate cache
+    auto start1 = std::chrono::high_resolution_clock::now();
+    auto& surface1 = world.GetSurfaceVoxels();
+    auto end1 = std::chrono::high_resolution_clock::now();
+    auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
+
+    // Second call (cache hit) - should be much faster
+    auto start2 = std::chrono::high_resolution_clock::now();
+    auto& surface2 = world.GetSurfaceVoxels();
+    auto end2 = std::chrono::high_resolution_clock::now();
+    auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
+
+    // Cache hit should be at least 10x faster
+    EXPECT_LT(duration2.count(), duration1.count() / 10);
+
+    // Verify surface count (10x10x10 cube has 488 surface voxels)
+    // (10*10*6 faces) - (8*8*6 interior faces) = 600 - 384 = 216? No...
+    // Actually: 10^3 - 8^3 = 1000 - 512 = 488
+    EXPECT_EQ(surface1.size(), 488);
 }

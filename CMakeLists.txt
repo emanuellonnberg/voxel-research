@@ -26,6 +26,25 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Options
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_EXAMPLES "Build example programs" ON)
+option(USE_BULLET "Use Bullet Physics engine" ON)
+
+# Bullet Physics (Week 5 Day 21)
+if(USE_BULLET)
+    message(STATUS "Including Bullet Physics from submodule")
+    set(BUILD_BULLET2_DEMOS OFF CACHE BOOL "Build Bullet2 demos" FORCE)
+    set(BUILD_BULLET3 OFF CACHE BOOL "Build Bullet3" FORCE)
+    set(BUILD_CPU_DEMOS OFF CACHE BOOL "Build CPU demos" FORCE)
+    set(BUILD_EXTRAS OFF CACHE BOOL "Build extras" FORCE)
+    set(BUILD_OPENGL3_DEMOS OFF CACHE BOOL "Build OpenGL3 demos" FORCE)
+    set(BUILD_UNIT_TESTS OFF CACHE BOOL "Build Bullet unit tests" FORCE)
+    set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "Use graphical benchmark" FORCE)
+
+    add_subdirectory(third_party/bullet3)
+    set(BULLET_LIBRARIES BulletDynamics BulletCollision LinearMath)
+    message(STATUS "Bullet Physics enabled")
+else()
+    message(STATUS "Bullet Physics disabled - using MockPhysicsEngine only")
+endif()
 
 # Find packages
 find_package(OpenGL)
@@ -94,29 +113,45 @@ add_library(VoxelCore
 
     # Voxel system
     src/voxel/VoxelWorld.cpp
-    # src/voxel/SpatialHash.cpp  (Week 1 Day 7)
+    src/voxel/VoxelUtils.cpp
+    src/voxel/SpatialHash.cpp
+    src/voxel/VoxelCluster.cpp
+    src/voxel/VoxelStability.cpp
+
+    # Rendering (Week 1 Day 3)
+    src/rendering/Camera.cpp
+    src/rendering/Renderer.cpp
 
     # Structural analysis (Week 3-4)
-    # src/structural/StructuralAnalyzer.cpp
+    src/structural/StructuralAnalyzer.cpp
+    src/structural/ParameterTuning.cpp
 
-    # Physics (Week 5-6)
-    # src/physics/PhysicsSystem.cpp
-
-    # Rendering (Week 1 Day 3-4)
-    # src/rendering/VoxelRenderer.cpp
-    # src/rendering/Camera.cpp
+    # Physics (Week 5 Day 22-23)
+    $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
+    src/physics/VoxelPhysicsIntegration.cpp
 )
 
 target_include_directories(VoxelCore PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    $<$<BOOL:${USE_BULLET}>:${CMAKE_SOURCE_DIR}/third_party/bullet3/src>
 )
 
-# Main executable (to be created later)
-# add_executable(VoxelDemo
-#     src/main.cpp
-# )
-# target_link_libraries(VoxelDemo VoxelCore OpenGL::GL glfw)
+# Link Bullet libraries if enabled
+if(USE_BULLET)
+    target_link_libraries(VoxelCore PUBLIC ${BULLET_LIBRARIES})
+endif()
+
+# Main executable
+add_executable(VoxelDemo
+    src/main.cpp
+)
+target_link_libraries(VoxelDemo VoxelCore)
+
+# OpenGL/GLFW linking (if available)
+if(OpenGL_FOUND AND glfw3_FOUND)
+    target_link_libraries(VoxelDemo OpenGL::GL glfw)
+endif()
 
 # Tests
 if(BUILD_TESTS)
@@ -124,6 +159,15 @@ if(BUILD_TESTS)
         tests/test_Vector3.cpp
         tests/test_Material.cpp
         tests/test_VoxelWorld.cpp
+        tests/test_Camera.cpp
+        tests/test_VoxelUtils.cpp
+        tests/test_SpatialHash.cpp
+        tests/test_VoxelCluster.cpp
+        tests/test_VoxelStability.cpp
+        tests/test_StructuralAnalyzer.cpp
+        tests/test_PhysicsEngine.cpp
+        tests/test_VoxelPhysicsIntegration.cpp
+        tests/test_Integration.cpp
     )
 
     target_link_libraries(VoxelTests
@@ -132,7 +176,31 @@ if(BUILD_TESTS)
         GTest::gtest_main
     )
 
+    # Define USE_BULLET for tests if enabled
+    if(USE_BULLET)
+        target_compile_definitions(VoxelTests PRIVATE USE_BULLET)
+    endif()
+
     gtest_discover_tests(VoxelTests)
+endif()
+
+# Examples (Day 20: Benchmark suite)
+if(BUILD_EXAMPLES)
+    add_executable(BenchmarkStructuralAnalysis
+        examples/benchmark_structural_analysis.cpp
+    )
+    target_link_libraries(BenchmarkStructuralAnalysis VoxelCore)
+
+    # Day 24: Integration demo
+    add_executable(IntegrationDemo
+        examples/demo_integration.cpp
+    )
+    target_link_libraries(IntegrationDemo VoxelCore)
+
+    # Define USE_BULLET for demo if enabled
+    if(USE_BULLET)
+        target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
+    endif()
 endif()
 
 # Print configuration
