@@ -26,6 +26,25 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Options
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_EXAMPLES "Build example programs" ON)
+option(USE_BULLET "Use Bullet Physics engine" ON)
+
+# Bullet Physics (Week 5 Day 21)
+if(USE_BULLET)
+    message(STATUS "Including Bullet Physics from submodule")
+    set(BUILD_BULLET2_DEMOS OFF CACHE BOOL "Build Bullet2 demos" FORCE)
+    set(BUILD_BULLET3 OFF CACHE BOOL "Build Bullet3" FORCE)
+    set(BUILD_CPU_DEMOS OFF CACHE BOOL "Build CPU demos" FORCE)
+    set(BUILD_EXTRAS OFF CACHE BOOL "Build extras" FORCE)
+    set(BUILD_OPENGL3_DEMOS OFF CACHE BOOL "Build OpenGL3 demos" FORCE)
+    set(BUILD_UNIT_TESTS OFF CACHE BOOL "Build Bullet unit tests" FORCE)
+    set(USE_GRAPHICAL_BENCHMARK OFF CACHE BOOL "Use graphical benchmark" FORCE)
+
+    add_subdirectory(third_party/bullet3)
+    set(BULLET_LIBRARIES BulletDynamics BulletCollision LinearMath)
+    message(STATUS "Bullet Physics enabled")
+else()
+    message(STATUS "Bullet Physics disabled - using MockPhysicsEngine only")
+endif()
 
 # Find packages
 find_package(OpenGL)
@@ -107,14 +126,20 @@ add_library(VoxelCore
     src/structural/StructuralAnalyzer.cpp
     src/structural/ParameterTuning.cpp
 
-    # Physics (Week 5-6)
-    # src/physics/PhysicsSystem.cpp
+    # Physics (Week 5 Day 22)
+    $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
 )
 
 target_include_directories(VoxelCore PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    $<$<BOOL:${USE_BULLET}>:${CMAKE_SOURCE_DIR}/third_party/bullet3/src>
 )
+
+# Link Bullet libraries if enabled
+if(USE_BULLET)
+    target_link_libraries(VoxelCore PUBLIC ${BULLET_LIBRARIES})
+endif()
 
 # Main executable
 add_executable(VoxelDemo
@@ -147,6 +172,11 @@ if(BUILD_TESTS)
         GTest::gtest
         GTest::gtest_main
     )
+
+    # Define USE_BULLET for tests if enabled
+    if(USE_BULLET)
+        target_compile_definitions(VoxelTests PRIVATE USE_BULLET)
+    endif()
 
     gtest_discover_tests(VoxelTests)
 endif()

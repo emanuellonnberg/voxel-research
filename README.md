@@ -87,8 +87,17 @@ voxel-research/
   - **Complete platform flexibility (Bullet, PhysX, custom)**
   - **11 comprehensive physics tests (all passing)**
   - **Works in container (no external dependencies)**
+- ✅ **Week 5 Day 22: Bullet Physics Integration**
+  - **Bullet3 added as git submodule (third_party/bullet3)**
+  - **BulletEngine with REAL collision detection**
+  - **Rigid body dynamics (gravity, forces, impulses, rotation)**
+  - **Collision shapes (box, sphere, convex hull)**
+  - **Raycasting with hit detection**
+  - **Ground collision and stacking**
+  - **8 BulletEngine tests (all passing)**
+  - **Production-ready physics (cross-platform, zlib license)**
 - ✅ Demo application with 6 test scenes
-- ✅ **275 unit tests (270 passing, 98.2%) ✓**
+- ✅ **283 unit tests (278 passing, 98.2%) ✓**
 
 ## Documentation
 
@@ -113,6 +122,9 @@ Comprehensive documentation is available in the `docs/` directory:
 - CMake 3.15+
 - OpenGL 3.3+
 
+### Included as Submodules
+- **Bullet Physics 3.x** (physics simulation, zlib license)
+
 ### Optional (auto-downloaded if not found)
 - GoogleTest (testing framework)
 - GLM (math library, fallback available)
@@ -125,6 +137,9 @@ Comprehensive documentation is available in the `docs/` directory:
 ```bash
 # Install dependencies (Ubuntu/Debian)
 sudo apt-get install build-essential cmake libglfw3-dev libglm-dev
+
+# Clone with submodules (or initialize if already cloned)
+git submodule update --init --recursive
 
 # Build
 mkdir build && cd build
