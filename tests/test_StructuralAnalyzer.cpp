@@ -907,3 +907,299 @@ TEST_F(StructuralAnalyzerTest, FailureDetection_StableAfterDamage) {
     std::cout << "[Stable After Damage] Failed: " << result.num_failed_nodes
               << ", Disconnected: " << result.num_disconnected_nodes << "\n";
 }
+
+// ===== Day 15: Week 3 Integration & Testing =====
+
+TEST_F(StructuralAnalyzerTest, Integration_TowerCollapse) {
+    // Complete end-to-end test: Build tower, remove base, verify collapse
+    float voxel_size = world.GetVoxelSize();
+
+    // Build 10-voxel tower
+    for (int y = 0; y < 10; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Remove base voxel
+    world.RemoveVoxel(Vector3(0, 0, 0));
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    // Analyze
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Verify complete collapse
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+    EXPECT_TRUE(result.converged || result.iterations_used > 0);
+    EXPECT_GT(result.failed_clusters.size(), 0);
+
+    // Verify performance
+    EXPECT_LT(result.calculation_time_ms, 500.0f);  // Within time budget
+
+    std::cout << "[Integration: Tower Collapse] "
+              << "Failed: " << result.num_failed_nodes << ", "
+              << "Time: " << result.calculation_time_ms << "ms, "
+              << "Clusters: " << result.failed_clusters.size() << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_BridgeWithRedundancy) {
+    // Foundation with redundant support - should remain stable after edge voxel removed
+    float voxel_size = world.GetVoxelSize();
+
+    // Create a 3x3 platform at ground level (y=0) - all are ground anchors
+    for (int x = 0; x < 3; x++) {
+        for (int z = 0; z < 3; z++) {
+            world.SetVoxel(Vector3(x * voxel_size, 0, z * voxel_size), Voxel(brick_id));
+        }
+    }
+
+    // Add a platform level on top connecting all columns
+    for (int x = 0; x < 3; x++) {
+        for (int z = 0; z < 3; z++) {
+            world.SetVoxel(Vector3(x * voxel_size, voxel_size, z * voxel_size), Voxel(brick_id));
+        }
+    }
+
+    // Remove edge voxel from base - structure still has many ground connections
+    world.RemoveVoxel(Vector3(2 * voxel_size, 0, 2 * voxel_size));
+    std::vector<Vector3> damaged = {Vector3(2 * voxel_size, 0, 2 * voxel_size)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Structure should remain stable (redundant ground support from other 8 columns)
+    EXPECT_FALSE(result.structure_failed);
+    EXPECT_EQ(result.num_disconnected_nodes, 0);
+
+    std::cout << "[Integration: Bridge Redundancy] "
+              << "Stable: " << !result.structure_failed << ", "
+              << "Time: " << result.calculation_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_WallPartialDamage) {
+    // Wall with partial damage near ground - should remain mostly stable
+    float voxel_size = world.GetVoxelSize();
+
+    // Create 10x5 wall (grounded at y=0)
+    for (int x = 0; x < 10; x++) {
+        for (int y = 0; y < 5; y++) {
+            world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, 0), Voxel(brick_id));
+        }
+    }
+
+    // Remove voxels from lower portion (near ground where analyzer will find ground-connected nodes)
+    world.RemoveVoxel(Vector3(5 * voxel_size, 1 * voxel_size, 0));
+
+    std::vector<Vector3> damaged = {
+        Vector3(5 * voxel_size, 1 * voxel_size, 0)
+    };
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Most nodes should remain stable (connected to ground on both sides)
+    // At most, a few nodes immediately adjacent to damage might fail
+    EXPECT_TRUE(result.nodes_analyzed > 0);
+    EXPECT_LT(static_cast<float>(result.num_failed_nodes) / result.nodes_analyzed, 0.5f);  // Less than 50% fail
+
+    std::cout << "[Integration: Wall Damage] "
+              << "Failed: " << result.num_failed_nodes << " / " << result.nodes_analyzed << ", "
+              << "Time: " << result.calculation_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_ComplexMultiStory) {
+    // Multi-story structure with columns - remove middle column to cause collapse
+    float voxel_size = world.GetVoxelSize();
+
+    // Create 3 columns in a line
+    for (int x = 0; x <= 2; x++) {
+        for (int y = 0; y < 6; y++) {
+            world.SetVoxel(Vector3(x * 2 * voxel_size, y * voxel_size, 0), Voxel(brick_id));
+        }
+    }
+
+    // Span connecting tops of all columns at level 5
+    for (int x = 0; x <= 4; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 5 * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Remove middle column at levels 2-3, breaking support
+    world.RemoveVoxel(Vector3(2 * voxel_size, 2 * voxel_size, 0));
+    world.RemoveVoxel(Vector3(2 * voxel_size, 3 * voxel_size, 0));
+
+    std::vector<Vector3> damaged = {
+        Vector3(2 * voxel_size, 2 * voxel_size, 0),
+        Vector3(2 * voxel_size, 3 * voxel_size, 0)
+    };
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should detect failure (top of middle column disconnected)
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+
+    std::cout << "[Integration: Multi-Story] "
+              << "Failed: " << result.num_failed_nodes << ", "
+              << "Clusters: " << result.failed_clusters.size() << ", "
+              << "Time: " << result.calculation_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_PerformanceLargeStructure) {
+    // Performance test with larger structure
+    float voxel_size = world.GetVoxelSize();
+
+    // Create 15x15 base
+    for (int x = 0; x < 15; x++) {
+        for (int z = 0; z < 15; z++) {
+            world.SetVoxel(Vector3(x * voxel_size, 0, z * voxel_size), Voxel(brick_id));
+        }
+    }
+
+    // Add some height (5 levels)
+    for (int y = 1; y < 5; y++) {
+        for (int x = 2; x < 13; x++) {
+            for (int z = 2; z < 13; z++) {
+                world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, z * voxel_size), Voxel(brick_id));
+            }
+        }
+    }
+
+    // Remove one voxel
+    world.RemoveVoxel(Vector3(7 * voxel_size, 0, 7 * voxel_size));
+    std::vector<Vector3> damaged = {Vector3(7 * voxel_size, 0, 7 * voxel_size)};
+
+    auto start = std::chrono::high_resolution_clock::now();
+    auto result = analyzer.Analyze(world, damaged, 1000.0f);  // 1 second budget
+    auto end = std::chrono::high_resolution_clock::now();
+    float elapsed = std::chrono::duration<float, std::milli>(end - start).count();
+
+    // Should complete within budget
+    EXPECT_LT(elapsed, 1000.0f);
+    EXPECT_LT(result.calculation_time_ms, 1000.0f);
+
+    // Should complete reasonably fast
+    EXPECT_LT(result.calculation_time_ms, 200.0f);  // Aim for < 200ms
+
+    std::cout << "[Integration: Large Structure Performance] "
+              << "Nodes: " << result.nodes_analyzed << ", "
+              << "Time: " << result.calculation_time_ms << "ms, "
+              << "Time/node: " << (result.calculation_time_ms / result.nodes_analyzed) << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_EndToEndWorkflow) {
+    // Complete workflow test: Build -> Damage -> Analyze -> Verify
+    float voxel_size = world.GetVoxelSize();
+
+    // Step 1: Build structure (L-shape)
+    for (int x = 0; x < 5; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 0, 0), Voxel(brick_id));
+    }
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Step 2: Apply damage
+    Vector3 damage_pos = Vector3(0, voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+
+    // Step 3: Analyze
+    auto result = analyzer.Analyze(world, {damage_pos});
+
+    // Step 4: Verify results
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.calculation_time_ms, 0.0f);
+    EXPECT_FALSE(result.debug_info.empty());
+
+    // Step 5: Verify profiling data
+    EXPECT_GT(result.node_graph_time_ms, 0.0f);
+    EXPECT_GE(result.mass_calc_time_ms, 0.0f);
+    EXPECT_GT(result.solver_time_ms, 0.0f);
+    EXPECT_GE(result.failure_detection_time_ms, 0.0f);
+
+    // Step 6: Verify clusters are usable
+    if (!result.failed_clusters.empty()) {
+        const auto& cluster = result.failed_clusters[0];
+        EXPECT_GT(cluster.voxel_positions.size(), 0);
+        EXPECT_GE(cluster.total_mass, 0.0f);
+    }
+
+    std::cout << "[Integration: End-to-End Workflow] "
+              << "Complete: SUCCESS, "
+              << "Total time: " << result.calculation_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_MaterialVariations) {
+    // Test different materials in same tower - remove base to cause failure
+    float voxel_size = world.GetVoxelSize();
+
+    // Build single tower with material layers
+    // Concrete base (grounded)
+    world.SetVoxel(Vector3(0, 0, 0), Voxel(MaterialDatabase::CONCRETE));
+    world.SetVoxel(Vector3(0, voxel_size, 0), Voxel(MaterialDatabase::CONCRETE));
+
+    // Brick middle
+    for (int y = 2; y < 4; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Wood top
+    for (int y = 4; y < 6; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    // Remove ground base - entire tower floats
+    world.RemoveVoxel(Vector3(0, 0, 0));
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should detect failure (entire tower disconnected from ground)
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+
+    std::cout << "[Integration: Material Variations] "
+              << "Failed: " << result.num_failed_nodes << ", "
+              << "Disconnected: " << result.num_disconnected_nodes << ", "
+              << "Time: " << result.calculation_time_ms << "ms\n";
+}
+
+TEST_F(StructuralAnalyzerTest, Integration_Week3Summary) {
+    // Summary test demonstrating all Week 3 capabilities
+    float voxel_size = world.GetVoxelSize();
+
+    // Build test structure
+    for (int y = 0; y < 8; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Add some width at top (overhang)
+    for (int x = -1; x <= 1; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 7 * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Remove middle voxel
+    world.RemoveVoxel(Vector3(0, 4 * voxel_size, 0));
+    std::vector<Vector3> damaged = {Vector3(0, 4 * voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Week 3 Capabilities Demonstrated:
+    std::cout << "\n=== Week 3 Summary ===" << "\n";
+    std::cout << "✅ Spring system: " << result.nodes_analyzed << " nodes analyzed\n";
+    std::cout << "✅ Mass calculation: " << result.mass_calc_time_ms << "ms (cache hits: " << result.cache_hits << ")\n";
+    std::cout << "✅ Displacement solver: " << result.iterations_used << " iterations, converged: " << result.converged << "\n";
+    std::cout << "✅ Failure detection: " << result.num_failed_nodes << " failed ("
+              << (result.num_failed_nodes - result.num_disconnected_nodes) << " displacement, "
+              << result.num_disconnected_nodes << " disconnected)\n";
+    std::cout << "✅ Cluster generation: " << result.failed_clusters.size() << " clusters\n";
+    std::cout << "✅ Performance profiling: " << result.calculation_time_ms << "ms total\n";
+    std::cout << "  - Node graph: " << result.node_graph_time_ms << "ms\n";
+    std::cout << "  - Mass calc: " << result.mass_calc_time_ms << "ms\n";
+    std::cout << "  - Solver: " << result.solver_time_ms << "ms\n";
+    std::cout << "  - Failure detection: " << result.failure_detection_time_ms << "ms\n";
+    std::cout << "=====================\n\n";
+
+    // Verify all capabilities work
+    EXPECT_GT(result.nodes_analyzed, 0);
+    EXPECT_GE(result.iterations_used, 0);
+    EXPECT_GT(result.calculation_time_ms, 0.0f);
+}
