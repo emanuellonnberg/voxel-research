@@ -191,6 +191,20 @@ public:
      */
     bool LoadParameters(const std::string& filename);
 
+    /**
+     * Validate parameters (Day 18)
+     * Clamps parameters to safe ranges and warns about invalid values
+     * @return true if parameters are valid/corrected
+     */
+    bool ValidateParameters();
+
+    /**
+     * Check for numerical stability issues (Day 18)
+     * Detects NaN, Inf, and extreme values in node states
+     * @return true if numerically stable
+     */
+    bool CheckNumericalStability() const;
+
     // Tunable parameters
     struct Parameters {
         float timestep;                 // Simulation timestep (default 0.01s)

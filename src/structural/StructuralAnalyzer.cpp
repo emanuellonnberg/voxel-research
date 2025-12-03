@@ -376,6 +376,15 @@ bool StructuralAnalyzer::SolveDisplacements() {
             }
         }
 
+        // Day 18: Periodic numerical stability check (every 10 iterations, even if early_termination is off)
+        if (i % 10 == 0) {
+            if (!CheckNumericalStability()) {
+                std::cerr << "[StructuralAnalyzer] Numerical instability detected at iteration "
+                          << iteration_count << " - aborting solver\n";
+                return false;
+            }
+        }
+
         // Day 13: Convergence based on displacement change (more stable than velocity)
         if (max_displacement_change < params.convergence_threshold) {
             std::cout << "[StructuralAnalyzer] Converged in " << iteration_count
@@ -539,6 +548,11 @@ AnalysisResult StructuralAnalyzer::Analyze(
     AnalysisResult result;
     world = &voxel_world;
 
+    // Day 18: Validate parameters before analysis
+    if (!ValidateParameters()) {
+        std::cerr << "[StructuralAnalyzer] Warning: Parameters were corrected during validation\n";
+    }
+
     // Step 1: Build node graph (Day 12: Profile this step)
     auto start_graph = Clock::now();
     BuildNodeGraph(damaged_positions);
@@ -549,12 +563,43 @@ AnalysisResult StructuralAnalyzer::Analyze(
         return result;
     }
 
+    // Day 18: Handle tiny clusters (single node edge case)
+    if (nodes.size() == 1) {
+        std::cout << "[StructuralAnalyzer] Single node detected - trivial case\n";
+        result.debug_info = "Single node analyzed (trivial case)";
+        result.nodes_analyzed = 1;
+
+        // Single node with no neighbors - check if it's grounded
+        if (!nodes[0]->is_ground_anchor) {
+            result.structure_failed = true;
+            result.num_failed_nodes = 1;
+            result.num_disconnected_nodes = 1;
+
+            // Create single-node cluster
+            VoxelCluster cluster;
+            cluster.voxel_positions.push_back(nodes[0]->position);
+            cluster.total_mass = 0.0f;  // Will be calculated by VoxelCluster
+            result.failed_clusters.push_back(cluster);
+        }
+
+        result.calculation_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_total).count();
+        return result;
+    }
+
     // Step 2: Calculate mass supported (Day 12: Profile this step)
     auto start_mass = Clock::now();
     CalculateMassSupported();
     result.mass_calc_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_mass).count();
     result.cache_hits = cache_hits;
     result.cache_misses = cache_misses;
+
+    // Day 18: Check numerical stability after mass calculation
+    if (!CheckNumericalStability()) {
+        result.debug_info = "Numerical instability detected after mass calculation";
+        result.calculation_time_ms = std::chrono::duration<float, std::milli>(Clock::now() - start_total).count();
+        result.structure_failed = true;  // Treat as failure
+        return result;
+    }
 
     // Step 3: Solve for displacements (Day 12: Profile this step)
     auto start_solver = Clock::now();
@@ -701,5 +746,121 @@ bool StructuralAnalyzer::LoadParameters(const std::string& filename) {
     }
 
     std::cout << "[StructuralAnalyzer] Parameters loaded from: " << filename << "\n";
+    return true;
+}
+
+// ============================================================================
+// Day 18: Parameter Validation and Edge Case Handling
+// ============================================================================
+
+bool StructuralAnalyzer::ValidateParameters() {
+    bool params_valid = true;
+
+    // Timestep validation
+    if (params.timestep <= 0.0f || params.timestep > 1.0f) {
+        std::cerr << "[StructuralAnalyzer] Invalid timestep: " << params.timestep
+                  << ", clamping to [0.0001, 1.0]\n";
+        params.timestep = std::max(0.0001f, std::min(1.0f, params.timestep));
+        params_valid = false;
+    }
+
+    // Damping validation (0 to 1)
+    if (params.damping < 0.0f || params.damping > 1.0f) {
+        std::cerr << "[StructuralAnalyzer] Invalid damping: " << params.damping
+                  << ", clamping to [0.0, 1.0]\n";
+        params.damping = std::max(0.0f, std::min(1.0f, params.damping));
+        params_valid = false;
+    }
+
+    // Max iterations validation
+    if (params.max_iterations <= 0) {
+        std::cerr << "[StructuralAnalyzer] Invalid max_iterations: " << params.max_iterations
+                  << ", setting to 1\n";
+        params.max_iterations = 1;
+        params_valid = false;
+    }
+    if (params.max_iterations > 10000) {
+        std::cerr << "[StructuralAnalyzer] Warning: Very high max_iterations: "
+                  << params.max_iterations << " (may be slow)\n";
+    }
+
+    // Convergence threshold validation
+    if (params.convergence_threshold <= 0.0f || params.convergence_threshold > 1.0f) {
+        std::cerr << "[StructuralAnalyzer] Invalid convergence_threshold: "
+                  << params.convergence_threshold << ", clamping to [0.00001, 1.0]\n";
+        params.convergence_threshold = std::max(0.00001f, std::min(1.0f, params.convergence_threshold));
+        params_valid = false;
+    }
+
+    // Influence radius validation
+    if (params.influence_radius <= 0.0f) {
+        std::cerr << "[StructuralAnalyzer] Invalid influence_radius: " << params.influence_radius
+                  << ", setting to 1.0\n";
+        params.influence_radius = 1.0f;
+        params_valid = false;
+    }
+    if (params.influence_radius > 1000.0f) {
+        std::cerr << "[StructuralAnalyzer] Warning: Very large influence_radius: "
+                  << params.influence_radius << " (may analyze too many nodes)\n";
+    }
+
+    return params_valid;
+}
+
+bool StructuralAnalyzer::CheckNumericalStability() const {
+    // Check for NaN, Inf, or extreme values in node states
+    for (const auto* node : nodes) {
+        // Check displacement
+        if (std::isnan(node->displacement) || std::isinf(node->displacement)) {
+            std::cerr << "[StructuralAnalyzer] Numerical instability detected: "
+                      << "Node " << node->id << " has invalid displacement ("
+                      << node->displacement << ")\n";
+            return false;
+        }
+
+        // Check velocity
+        if (std::isnan(node->velocity) || std::isinf(node->velocity)) {
+            std::cerr << "[StructuralAnalyzer] Numerical instability detected: "
+                      << "Node " << node->id << " has invalid velocity ("
+                      << node->velocity << ")\n";
+            return false;
+        }
+
+        // Check mass
+        if (std::isnan(node->mass_supported) || std::isinf(node->mass_supported)) {
+            std::cerr << "[StructuralAnalyzer] Numerical instability detected: "
+                      << "Node " << node->id << " has invalid mass ("
+                      << node->mass_supported << ")\n";
+            return false;
+        }
+
+        // Check for extreme values (likely indicates instability)
+        // Note: We use generous thresholds to catch only truly extreme numerical errors
+        const float EXTREME_DISPLACEMENT = 100000.0f;  // 100km displacement is clearly numerical error
+        const float EXTREME_VELOCITY = 10000.0f;       // 10km/s velocity is clearly numerical error
+        const float EXTREME_MASS = 1e10f;              // 10 billion kg is clearly numerical error
+
+        if (std::abs(node->displacement) > EXTREME_DISPLACEMENT) {
+            std::cerr << "[StructuralAnalyzer] Numerical instability detected: "
+                      << "Node " << node->id << " has extreme displacement ("
+                      << node->displacement << "m)\n";
+            return false;
+        }
+
+        if (std::abs(node->velocity) > EXTREME_VELOCITY) {
+            std::cerr << "[StructuralAnalyzer] Numerical instability detected: "
+                      << "Node " << node->id << " has extreme velocity ("
+                      << node->velocity << "m/s)\n";
+            return false;
+        }
+
+        if (node->mass_supported > EXTREME_MASS) {
+            std::cerr << "[StructuralAnalyzer] Numerical instability detected: "
+                      << "Node " << node->id << " has extreme mass ("
+                      << node->mass_supported << "kg)\n";
+            return false;
+        }
+    }
+
     return true;
 }

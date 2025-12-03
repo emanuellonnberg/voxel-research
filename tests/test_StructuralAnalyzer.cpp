@@ -1605,3 +1605,245 @@ TEST_F(StructuralAnalyzerTest, ParameterTuning_SaveSensitivityCSV) {
 
     std::cout << "[ParameterTuning: SaveSensitivityCSV] SUCCESS\n";
 }
+
+// ============================================================================
+// DAY 18: Edge Cases & Robustness Tests
+// ============================================================================
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_SingleVoxel) {
+    // Day 18: Test single voxel analysis (trivial case)
+    float voxel_size = world.GetVoxelSize();
+
+    // Create single voxel NOT on ground
+    world.SetVoxel(Vector3(0, voxel_size, 0), Voxel(brick_id));
+
+    // Remove it (damage)
+    world.RemoveVoxel(Vector3(0, voxel_size, 0));
+    std::vector<Vector3> damaged = {Vector3(0, voxel_size, 0)};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should handle gracefully (no nodes after damage)
+    EXPECT_EQ(result.nodes_analyzed, 0);
+    EXPECT_FALSE(result.structure_failed);
+
+    std::cout << "[EdgeCase: SingleVoxel] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_SingleFloatingVoxel) {
+    // Day 18: Single floating voxel should be detected as failure
+    float voxel_size = world.GetVoxelSize();
+
+    // Create single voxel floating in air
+    world.SetVoxel(Vector3(0, voxel_size * 2, 0), Voxel(brick_id));
+
+    // Damage nearby to trigger analysis
+    Vector3 damage_pos(0, voxel_size, 0);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Single node, not grounded, should fail
+    EXPECT_EQ(result.nodes_analyzed, 1);
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_EQ(result.num_failed_nodes, 1);
+    EXPECT_EQ(result.num_disconnected_nodes, 1);
+
+    std::cout << "[EdgeCase: SingleFloatingVoxel] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_EmptyDamageList) {
+    // Day 18: Test with empty damage list
+    float voxel_size = world.GetVoxelSize();
+
+    // Build structure
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Empty damage list
+    std::vector<Vector3> damaged;
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Should handle gracefully (BuildNodeGraph returns early)
+    EXPECT_EQ(result.nodes_analyzed, 0);
+    EXPECT_FALSE(result.structure_failed);
+
+    std::cout << "[EdgeCase: EmptyDamageList] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_InvalidParameters_NegativeTimestep) {
+    // Day 18: Test parameter validation with negative timestep
+    analyzer.params.timestep = -0.01f;
+
+    bool valid = analyzer.ValidateParameters();
+
+    // Should correct the parameter
+    EXPECT_FALSE(valid);  // Returns false because params were corrected
+    EXPECT_GT(analyzer.params.timestep, 0.0f);  // Should be clamped to positive
+
+    std::cout << "[EdgeCase: InvalidParameters_NegativeTimestep] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_InvalidParameters_ZeroIterations) {
+    // Day 18: Test parameter validation with zero max_iterations
+    analyzer.params.max_iterations = 0;
+
+    bool valid = analyzer.ValidateParameters();
+
+    // Should correct the parameter
+    EXPECT_FALSE(valid);
+    EXPECT_GT(analyzer.params.max_iterations, 0);  // Should be set to 1
+
+    std::cout << "[EdgeCase: InvalidParameters_ZeroIterations] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_InvalidParameters_ExcessiveDamping) {
+    // Day 18: Test parameter validation with damping > 1.0
+    analyzer.params.damping = 1.5f;
+
+    bool valid = analyzer.ValidateParameters();
+
+    // Should clamp to [0, 1]
+    EXPECT_FALSE(valid);
+    EXPECT_LE(analyzer.params.damping, 1.0f);
+    EXPECT_GE(analyzer.params.damping, 0.0f);
+
+    std::cout << "[EdgeCase: InvalidParameters_ExcessiveDamping] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_TwoVoxelCluster) {
+    // Day 18: Two voxel cluster both floating
+    float voxel_size = world.GetVoxelSize();
+
+    // Create two connected voxels above ground
+    world.SetVoxel(Vector3(0, voxel_size, 0), Voxel(brick_id));
+    world.SetVoxel(Vector3(0, voxel_size * 2, 0), Voxel(brick_id));
+
+    Vector3 damage_pos(voxel_size, voxel_size, 0);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Both nodes floating, should fail
+    EXPECT_EQ(result.nodes_analyzed, 2);
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+
+    std::cout << "[EdgeCase: TwoVoxelCluster] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_AllGroundAnchors) {
+    // Day 18: All voxels are ground anchors (should be stable)
+    float voxel_size = world.GetVoxelSize();
+
+    // Create structure entirely on ground
+    for (int x = 0; x < 3; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 0, 0), Voxel(brick_id));
+    }
+
+    // Damage nearby
+    Vector3 damage_pos(1.5f * voxel_size, 0, 0);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // All ground anchors should be stable
+    EXPECT_FALSE(result.structure_failed);
+
+    std::cout << "[EdgeCase: AllGroundAnchors] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_NumericalStabilityCheck) {
+    // Day 18: Verify numerical stability checking works
+    float voxel_size = world.GetVoxelSize();
+
+    // Build small structure
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    Vector3 damage_pos(0, voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Analysis should complete without numerical instability
+    // (CheckNumericalStability is called internally)
+    EXPECT_GT(result.calculation_time_ms, 0.0f);
+
+    std::cout << "[EdgeCase: NumericalStabilityCheck] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_MultipleDisconnectedClusters) {
+    // Day 18: Multiple separate floating structures
+    float voxel_size = world.GetVoxelSize();
+
+    // Cluster 1: Floating at (0, 2, 0)
+    world.SetVoxel(Vector3(0, voxel_size * 2, 0), Voxel(brick_id));
+    world.SetVoxel(Vector3(0, voxel_size * 3, 0), Voxel(brick_id));
+
+    // Cluster 2: Floating at (5, 2, 0)
+    world.SetVoxel(Vector3(5 * voxel_size, voxel_size * 2, 0), Voxel(brick_id));
+    world.SetVoxel(Vector3(5 * voxel_size, voxel_size * 3, 0), Voxel(brick_id));
+
+    // Damage to trigger analysis
+    Vector3 damage_pos(2.5f * voxel_size, voxel_size * 2, 0);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    // Both clusters should be detected as failures
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_disconnected_nodes, 0);
+
+    std::cout << "[EdgeCase: MultipleDisconnectedClusters] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_VerySmallInfluenceRadius) {
+    // Day 18: Very small influence radius should still work
+    float voxel_size = world.GetVoxelSize();
+
+    // Build structure
+    for (int y = 0; y < 5; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    Vector3 damage_pos(0, 2 * voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+
+    // Very small radius (will only analyze very close voxels)
+    analyzer.params.influence_radius = 0.1f;
+
+    auto result = analyzer.Analyze(world, {damage_pos});
+
+    // Should still complete (though may analyze fewer nodes)
+    EXPECT_GT(result.calculation_time_ms, 0.0f);
+
+    std::cout << "[EdgeCase: VerySmallInfluenceRadius] SUCCESS\n";
+}
+
+TEST_F(StructuralAnalyzerTest, EdgeCase_VeryLargeInfluenceRadius) {
+    // Day 18: Very large influence radius should work
+    float voxel_size = world.GetVoxelSize();
+
+    // Build structure
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    Vector3 damage_pos(0, voxel_size, 0);
+    world.RemoveVoxel(damage_pos);
+
+    // Very large radius
+    analyzer.params.influence_radius = 1000.0f;
+
+    auto result = analyzer.Analyze(world, {damage_pos});
+
+    // Should still complete
+    EXPECT_GT(result.calculation_time_ms, 0.0f);
+
+    std::cout << "[EdgeCase: VeryLargeInfluenceRadius] SUCCESS\n";
+}

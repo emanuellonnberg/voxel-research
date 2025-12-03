@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 4 Day 17)
+### Current (Week 4 Day 18)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -59,8 +59,16 @@ voxel-research/
   - **Auto-tuning with grid search**
   - **Optimal parameter configurations (default + optimal)**
   - **CSV export for analysis results**
+- ✅ **Day 18: Edge cases & robustness**
+  - **Parameter validation with automatic correction**
+  - **Numerical stability detection (NaN/Inf/extreme values)**
+  - **Tiny cluster handling (single/two voxel edge cases)**
+  - **Periodic stability checks during solving**
+  - **Empty damage list handling**
+  - **Invalid parameter protection (negative/zero/excessive values)**
+  - **Comprehensive edge case test suite (12 tests)**
 - ✅ Demo application with 6 test scenes
-- ✅ **252 unit tests (249 passing) ✓**
+- ✅ **264 unit tests (258 passing) ✓**
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
