@@ -139,6 +139,7 @@ if(BUILD_TESTS)
         tests/test_VoxelCluster.cpp
         tests/test_VoxelStability.cpp
         tests/test_StructuralAnalyzer.cpp
+        tests/test_PhysicsEngine.cpp
     )
 
     target_link_libraries(VoxelTests
