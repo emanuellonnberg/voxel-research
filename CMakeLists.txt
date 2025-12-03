@@ -150,6 +150,14 @@ if(BUILD_TESTS)
     gtest_discover_tests(VoxelTests)
 endif()
 
+# Examples (Day 20: Benchmark suite)
+if(BUILD_EXAMPLES)
+    add_executable(BenchmarkStructuralAnalysis
+        examples/benchmark_structural_analysis.cpp
+    )
+    target_link_libraries(BenchmarkStructuralAnalysis VoxelCore)
+endif()
+
 # Print configuration
 message(STATUS "")
 message(STATUS "=== VoxelDestruction Configuration ===")
