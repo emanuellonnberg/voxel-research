@@ -154,8 +154,26 @@ voxel-research/
     - **Automatic state updates during Step()**
   - **6 settling detection tests (all passing)**
   - **Foundation for future optimizations (culling, sleep, removal)**
+- ✅ **Week 5 Day 27: Rubble Generation System**
+  - **RubbleSystem for tracking settled debris as static objects:**
+    - **RubbleObject struct (position, height, radius, material)**
+    - **AddRubble() - Add settled debris to rubble tracking**
+    - **RemoveRubbleNear() - Cleanup rubble in radius**
+    - **ClearAll() - Remove all rubble**
+  - **Cover height queries for gameplay:**
+    - **GetCoverHeight() - Calculate average rubble height at position**
+    - **HasCover() - Quick boolean check for cover availability**
+    - **GetRubbleNearby() - Find rubble within radius**
+    - **GetAllRubble() - Get complete rubble list**
+  - **Use cases:**
+    - **Cover system for AI/player positioning**
+    - **Navigation obstacle data for pathfinding**
+    - **Performance optimization (convert settled debris to static)**
+    - **Environmental effects and rendering**
+  - **14 rubble system tests (all passing)**
+  - **Standalone system ready for integration**
 - ✅ Demo application with 6 test scenes
-- ✅ **330 unit tests (324 passing, 98.2%) ✓**
+- ✅ **344 unit tests (338 passing, 98.3%) ✓**
 
 ## Documentation
 

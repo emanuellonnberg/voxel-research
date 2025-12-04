@@ -127,9 +127,10 @@ add_library(VoxelCore
     src/structural/ParameterTuning.cpp
     src/structural/VoxelFragmentation.cpp
 
-    # Physics (Week 5 Day 22-23)
+    # Physics (Week 5 Day 22-27)
     $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
     src/physics/VoxelPhysicsIntegration.cpp
+    src/physics/RubbleSystem.cpp
 )
 
 target_include_directories(VoxelCore PUBLIC
@@ -170,6 +171,7 @@ if(BUILD_TESTS)
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
         tests/test_VoxelFragmentation.cpp
+        tests/test_RubbleSystem.cpp
     )
 
     target_link_libraries(VoxelTests
