@@ -108,6 +108,7 @@ add_library(VoxelCore
     # Core utilities
     src/core/Vector3.cpp
     src/core/Material.cpp
+    src/core/TurnManager.cpp
 
     # Voxel system
     src/voxel/VoxelWorld.cpp
@@ -179,6 +180,7 @@ if(BUILD_TESTS)
         tests/test_VoxelFragmentation.cpp
         tests/test_RubbleSystem.cpp
         tests/test_ParticleSystem.cpp
+        tests/test_turn_manager.cpp
     )
 
     target_link_libraries(VoxelTests

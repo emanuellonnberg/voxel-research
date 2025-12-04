@@ -21,11 +21,12 @@ protected:
 // ===== Color Tests =====
 
 TEST_F(ParticleSystemTest, ColorConstruction) {
+    // Default color is now black (Week 7: unified with Material.h)
     Color c1;
-    EXPECT_FLOAT_EQ(c1.r, 1.0f);
-    EXPECT_FLOAT_EQ(c1.g, 1.0f);
-    EXPECT_FLOAT_EQ(c1.b, 1.0f);
-    EXPECT_FLOAT_EQ(c1.a, 1.0f);
+    EXPECT_FLOAT_EQ(c1.r, 0.0f);
+    EXPECT_FLOAT_EQ(c1.g, 0.0f);
+    EXPECT_FLOAT_EQ(c1.b, 0.0f);
+    EXPECT_FLOAT_EQ(c1.a, 1.0f); // Alpha defaults to fully opaque
 
     Color c2(0.5f, 0.6f, 0.7f, 0.8f);
     EXPECT_FLOAT_EQ(c2.r, 0.5f);
