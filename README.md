@@ -134,10 +134,10 @@ voxel-research/
     - **Automatic cluster fragmentation before debris spawn**
     - **ConfigurableFragmentationEnabled/MaterialVelocitiesEnabled flags**
     - **ApplyMaterialVelocity() for realistic motion**
-  - **14 fragmentation tests (11 passing)**
+  - **14 fragmentation tests (all passing)**
   - **Enabled by default for realistic destruction**
 - ✅ Demo application with 6 test scenes
-- ✅ **325 unit tests (316 passing, 97.2%) ✓**
+- ✅ **324 unit tests (319 passing, 98.5%) ✓**
 
 ## Documentation
 
