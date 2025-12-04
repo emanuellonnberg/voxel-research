@@ -110,6 +110,44 @@ public:
      */
     void SetMaterialVelocitiesEnabled(bool enable);
 
+    // ===== Week 5 Day 29: Optimization =====
+
+    /**
+     * Collision groups for filtering
+     */
+    enum CollisionGroup {
+        COL_GROUND = 1 << 0,  // 0x0001 - Ground/static geometry
+        COL_DEBRIS = 1 << 1,  // 0x0002 - Falling debris
+        COL_UNITS  = 1 << 2   // 0x0004 - Game units/characters
+    };
+
+    /**
+     * Enable optimized collision filtering
+     * @param debris_collides_debris If false, debris won't collide with other debris (major optimization)
+     *
+     * Week 5 Day 29: Prevents debris-debris collisions for better performance
+     */
+    void SetCollisionFiltering(bool debris_collides_debris);
+
+    /**
+     * Remove debris older than specified age
+     * @param max_age Maximum age in seconds
+     * @return Number of debris removed
+     *
+     * Week 5 Day 29: Cleanup optimization
+     */
+    int RemoveDebrisOlderThan(float max_age);
+
+    /**
+     * Remove debris beyond specified distance from position
+     * @param position Reference position (usually camera)
+     * @param max_distance Maximum distance
+     * @return Number of debris removed
+     *
+     * Week 5 Day 29: Distance-based cleanup
+     */
+    int RemoveDebrisBeyondDistance(const Vector3& position, float max_distance);
+
     // ===== Queries =====
 
     /**
@@ -210,10 +248,11 @@ private:
         int voxel_count;                 // Number of voxels in cluster
         DebrisState state;               // Current state
         float time_below_threshold;      // Time spent below velocity thresholds
+        float spawn_time;                // Time when debris was spawned (Week 5 Day 29)
 
-        DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count)
+        DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count, float time = 0.0f)
             : body(b), shape(s), cluster_id(id), voxel_count(count),
-              state(DebrisState::ACTIVE), time_below_threshold(0.0f) {}
+              state(DebrisState::ACTIVE), time_below_threshold(0.0f), spawn_time(time) {}
     };
 
     std::vector<DebrisBody> debris_bodies;
@@ -236,6 +275,10 @@ private:
 
     // Week 5 Day 28: Impact detection
     ImpactDetector* impact_detector;    // Impact detector (nullptr when disabled)
+
+    // Week 5 Day 29: Optimization
+    bool debris_collides_debris;        // Whether debris collides with other debris
+    float simulation_time;              // Total elapsed simulation time
 
     // ===== Helper Functions =====
 

@@ -14,6 +14,8 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
     , settling_angular_threshold(0.2f)  // Week 5 Day 26: 0.2 rad/s
     , settling_time_threshold(0.5f)     // Week 5 Day 26: 0.5 seconds
     , impact_detector(nullptr)          // Week 5 Day 28: Disabled by default
+    , debris_collides_debris(true)      // Week 5 Day 29: Enabled by default
+    , simulation_time(0.0f)             // Week 5 Day 29: Start at 0
 {
     if (!physics_engine) {
         throw std::runtime_error("VoxelPhysicsIntegration: physics_engine cannot be null");
@@ -116,8 +118,21 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
                 }
             }
 
-            // Track debris
-            debris_bodies.emplace_back(body, shape, cluster.cluster_id, fragment.voxel_positions.size());
+            // Week 5 Day 29: Apply collision filtering (Bullet only)
+#ifdef USE_BULLET
+            btRigidBody* bt_body = static_cast<btRigidBody*>(body);
+            if (bt_body && bt_body->getBroadphaseHandle()) {
+                short debris_mask = debris_collides_debris ?
+                    (COL_GROUND | COL_DEBRIS | COL_UNITS) :
+                    (COL_GROUND | COL_UNITS);
+                bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+                bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+            }
+#endif
+
+            // Track debris (Week 5 Day 29: Include spawn time)
+            debris_bodies.emplace_back(body, shape, cluster.cluster_id,
+                                     fragment.voxel_positions.size(), simulation_time);
 
             spawned_count++;
         }
@@ -138,6 +153,9 @@ void VoxelPhysicsIntegration::Step(float deltaTime) {
     if (!physics_engine) {
         return;
     }
+
+    // Week 5 Day 29: Track total simulation time
+    simulation_time += deltaTime;
 
     // Step physics simulation
     physics_engine->Step(deltaTime);
@@ -606,4 +624,153 @@ ImpactDetector* VoxelPhysicsIntegration::GetImpactDetector() {
 #else
     return nullptr;
 #endif
+}
+
+// ===== Week 5 Day 29: Optimization =====
+
+void VoxelPhysicsIntegration::SetCollisionFiltering(bool debris_collides_debris_flag) {
+    debris_collides_debris = debris_collides_debris_flag;
+
+#ifdef USE_BULLET
+    // Only apply if using BulletEngine
+    BulletEngine* bullet_engine = dynamic_cast<BulletEngine*>(physics_engine);
+    if (!bullet_engine) {
+        return; // Not using Bullet, skip
+    }
+
+    // Determine collision mask for debris
+    short debris_mask;
+    if (debris_collides_debris_flag) {
+        // Debris collides with everything
+        debris_mask = COL_GROUND | COL_DEBRIS | COL_UNITS;
+    } else {
+        // Debris collides with ground and units, NOT other debris (optimization)
+        debris_mask = COL_GROUND | COL_UNITS;
+    }
+
+    // Apply collision filtering to all existing debris
+    for (const auto& debris : debris_bodies) {
+        btRigidBody* body = static_cast<btRigidBody*>(debris.body);
+        if (body && body->getBroadphaseHandle()) {
+            body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+            body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+        }
+    }
+
+    std::cout << "[VoxelPhysicsIntegration] Collision filtering: debris-debris = "
+              << (debris_collides_debris_flag ? "ENABLED" : "DISABLED") << "\n";
+#else
+    (void)debris_collides_debris_flag; // Unused without Bullet
+#endif
+}
+
+int VoxelPhysicsIntegration::RemoveDebrisOlderThan(float max_age) {
+    if (!physics_engine) {
+        return 0;
+    }
+
+    int removed_count = 0;
+    auto it = debris_bodies.begin();
+
+    while (it != debris_bodies.end()) {
+        float age = simulation_time - it->spawn_time;
+
+        if (age > max_age) {
+            // Unregister from impact detector if active
+#ifdef USE_BULLET
+            if (impact_detector) {
+                btRigidBody* body = static_cast<btRigidBody*>(it->body);
+                impact_detector->UnregisterBody(body);
+            }
+#endif
+
+            // Destroy physics objects
+            physics_engine->DestroyRigidBody(it->body);
+            physics_engine->DestroyShape(it->shape);
+
+            // Remove from cluster tracking
+            cluster_to_debris.erase(it->cluster_id);
+
+            // Remove from list
+            it = debris_bodies.erase(it);
+            removed_count++;
+        } else {
+            ++it;
+        }
+    }
+
+    if (removed_count > 0) {
+        std::cout << "[VoxelPhysicsIntegration] Removed " << removed_count
+                  << " debris older than " << max_age << "s\n";
+    }
+
+    return removed_count;
+}
+
+int VoxelPhysicsIntegration::RemoveDebrisBeyondDistance(const Vector3& position, float max_distance) {
+    if (!physics_engine) {
+        return 0;
+    }
+
+    int removed_count = 0;
+    float max_distance_sq = max_distance * max_distance; // Avoid sqrt
+    auto it = debris_bodies.begin();
+
+    while (it != debris_bodies.end()) {
+        // Get debris position (use Bullet directly when available)
+        Vector3 debris_pos;
+
+#ifdef USE_BULLET
+        btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
+        if (bt_body) {
+            btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
+            debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
+        } else {
+            ++it;
+            continue;
+        }
+#else
+        // For non-Bullet engines, use velocity as proxy (simplified)
+        Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
+        if (vel.Length() < 0.01f) {
+            // Assume settled debris is at spawn position (simplified)
+            ++it;
+            continue;
+        }
+        debris_pos = Vector3::Zero(); // Fallback
+#endif
+
+        Vector3 delta = debris_pos - position;
+        float distance_sq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;
+
+        if (distance_sq > max_distance_sq) {
+            // Unregister from impact detector if active
+#ifdef USE_BULLET
+            if (impact_detector) {
+                btRigidBody* body = static_cast<btRigidBody*>(it->body);
+                impact_detector->UnregisterBody(body);
+            }
+#endif
+
+            // Destroy physics objects
+            physics_engine->DestroyRigidBody(it->body);
+            physics_engine->DestroyShape(it->shape);
+
+            // Remove from cluster tracking
+            cluster_to_debris.erase(it->cluster_id);
+
+            // Remove from list
+            it = debris_bodies.erase(it);
+            removed_count++;
+        } else {
+            ++it;
+        }
+    }
+
+    if (removed_count > 0) {
+        std::cout << "[VoxelPhysicsIntegration] Removed " << removed_count
+                  << " debris beyond " << max_distance << "m\n";
+    }
+
+    return removed_count;
 }
