@@ -48,35 +48,33 @@ endif()
 
 # Find packages
 find_package(OpenGL)
-if(NOT OpenGL_FOUND)
-    message(WARNING "OpenGL not found. Rendering features will be disabled (needed for Week 1 Day 3+)")
-endif()
+if(OpenGL_FOUND)
+    message(STATUS "OpenGL found - enabling rendering support")
 
-# GLM (header-only math library)
-find_package(glm CONFIG)
-if(NOT glm_FOUND)
-    message(STATUS "GLM not found via find_package, will try include path")
-    # Fallback: try to find GLM headers
-    find_path(GLM_INCLUDE_DIR glm/glm.hpp
-        PATHS
-            /usr/include
-            /usr/local/include
-            ${CMAKE_SOURCE_DIR}/external/glm
-    )
-    if(GLM_INCLUDE_DIR)
-        add_library(glm INTERFACE)
-        target_include_directories(glm INTERFACE ${GLM_INCLUDE_DIR})
-        message(STATUS "Found GLM at: ${GLM_INCLUDE_DIR}")
-    else()
-        message(WARNING "GLM not found. Will use custom Vector3 implementation.")
-    endif()
-endif()
+    # GLM (header-only math library from submodule)
+    message(STATUS "Including GLM from submodule")
+    add_subdirectory(third_party/glm)
+    message(STATUS "GLM enabled")
 
-# GLFW (windowing)
-find_package(glfw3 CONFIG)
-if(NOT glfw3_FOUND)
-    message(STATUS "GLFW3 not found via find_package")
-    # User needs to install GLFW3
+    # GLFW (windowing from submodule)
+    message(STATUS "Including GLFW from submodule")
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "Build GLFW docs" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "Build GLFW examples" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "Build GLFW tests" FORCE)
+    set(GLFW_INSTALL OFF CACHE BOOL "Generate GLFW installation target" FORCE)
+    add_subdirectory(third_party/glfw)
+    message(STATUS "GLFW enabled")
+
+    # GLAD (OpenGL loader from submodule)
+    message(STATUS "Including GLAD from submodule")
+    add_subdirectory(third_party/glad/cmake)
+    glad_add_library(glad REPRODUCIBLE API gl:core=3.3)
+    message(STATUS "GLAD enabled")
+
+    set(RENDERING_ENABLED ON)
+else()
+    message(WARNING "OpenGL not found - rendering features will be disabled")
+    set(RENDERING_ENABLED OFF)
 endif()
 
 # GoogleTest (for testing)
@@ -139,9 +137,20 @@ target_include_directories(VoxelCore PUBLIC
     $<$<BOOL:${USE_BULLET}>:${CMAKE_SOURCE_DIR}/third_party/bullet3/src>
 )
 
-# Link Bullet libraries if enabled
+# Link libraries
 if(USE_BULLET)
     target_link_libraries(VoxelCore PUBLIC ${BULLET_LIBRARIES})
+endif()
+
+# Link OpenGL libraries if rendering is enabled
+if(RENDERING_ENABLED)
+    target_link_libraries(VoxelCore PUBLIC
+        glm::glm
+        OpenGL::GL
+        glfw
+        glad
+    )
+    target_compile_definitions(VoxelCore PUBLIC RENDERING_ENABLED)
 endif()
 
 # Main executable
@@ -149,11 +158,6 @@ add_executable(VoxelDemo
     src/main.cpp
 )
 target_link_libraries(VoxelDemo VoxelCore)
-
-# OpenGL/GLFW linking (if available)
-if(OpenGL_FOUND AND glfw3_FOUND)
-    target_link_libraries(VoxelDemo OpenGL::GL glfw)
-endif()
 
 # Tests
 if(BUILD_TESTS)
