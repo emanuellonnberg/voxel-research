@@ -13,6 +13,7 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
     , settling_linear_threshold(0.1f)   // Week 5 Day 26: 0.1 m/s
     , settling_angular_threshold(0.2f)  // Week 5 Day 26: 0.2 rad/s
     , settling_time_threshold(0.5f)     // Week 5 Day 26: 0.5 seconds
+    , impact_detector(nullptr)          // Week 5 Day 28: Disabled by default
 {
     if (!physics_engine) {
         throw std::runtime_error("VoxelPhysicsIntegration: physics_engine cannot be null");
@@ -23,6 +24,7 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
 }
 
 VoxelPhysicsIntegration::~VoxelPhysicsIntegration() {
+    DisableImpactDetection(); // Week 5 Day 28: Cleanup impact detector
     ClearDebris();
     std::cout << "[VoxelPhysicsIntegration] Shutdown complete\n";
 }
@@ -142,6 +144,13 @@ void VoxelPhysicsIntegration::Step(float deltaTime) {
 
     // Week 5 Day 26: Update debris settling states
     UpdateDebrisStates(deltaTime);
+
+#ifdef USE_BULLET
+    // Week 5 Day 28: Detect impacts and spawn particles
+    if (impact_detector) {
+        impact_detector->DetectAndSpawnParticles();
+    }
+#endif
 
     // Optional: Sync debris positions back to voxel world
     // (If you want to visualize debris movement in the voxel grid)
@@ -514,4 +523,87 @@ int VoxelPhysicsIntegration::ConvertSettledToStatic() {
     }
 
     return settled_count;
+}
+
+// ===== Impact Detection (Week 5 Day 28) =====
+
+#ifdef USE_BULLET
+#include "ImpactDetector.h"
+#include "BulletEngine.h"
+#endif
+
+void VoxelPhysicsIntegration::EnableImpactDetection(ParticleSystem* particle_system, float impulse_threshold) {
+#ifdef USE_BULLET
+    // Disable existing detector if any
+    DisableImpactDetection();
+
+    if (!particle_system) {
+        std::cerr << "[VoxelPhysicsIntegration] Cannot enable impact detection: particle_system is null\n";
+        return;
+    }
+
+    // Get Bullet dynamics world from physics engine
+    BulletEngine* bullet_engine = dynamic_cast<BulletEngine*>(physics_engine);
+    if (!bullet_engine) {
+        std::cerr << "[VoxelPhysicsIntegration] Impact detection requires BulletEngine\n";
+        return;
+    }
+
+    btDynamicsWorld* dynamics_world = bullet_engine->GetDynamicsWorld();
+    if (!dynamics_world) {
+        std::cerr << "[VoxelPhysicsIntegration] BulletEngine dynamics world is null\n";
+        return;
+    }
+
+    // Create impact detector
+    impact_detector = new ImpactDetector(particle_system, dynamics_world);
+    impact_detector->SetImpulseThreshold(impulse_threshold);
+
+    // Register materials for existing debris
+    for (const auto& debris : debris_bodies) {
+        // Get material from voxel world
+        uint8_t material_id = MaterialDatabase::CONCRETE; // Default
+        if (voxel_world && !debris.voxel_count == 0) {
+            // Try to get material from first voxel (simplified)
+            material_id = MaterialDatabase::CONCRETE;
+        }
+
+        // Register with impact detector
+        btRigidBody* body = static_cast<btRigidBody*>(debris.body);
+        impact_detector->RegisterBodyMaterial(body, material_id);
+    }
+
+    std::cout << "[VoxelPhysicsIntegration] Impact detection enabled (threshold: "
+              << impulse_threshold << " N·s)\n";
+#else
+    (void)particle_system;
+    (void)impulse_threshold;
+    std::cerr << "[VoxelPhysicsIntegration] Impact detection requires Bullet Physics (USE_BULLET)\n";
+#endif
+}
+
+void VoxelPhysicsIntegration::DisableImpactDetection() {
+#ifdef USE_BULLET
+    if (impact_detector) {
+        delete impact_detector;
+        impact_detector = nullptr;
+        std::cout << "[VoxelPhysicsIntegration] Impact detection disabled\n";
+    }
+#endif
+}
+
+bool VoxelPhysicsIntegration::IsImpactDetectionEnabled() const {
+#ifdef USE_BULLET
+    return impact_detector != nullptr;
+#else
+    return false;
+#endif
+}
+
+ImpactDetector* VoxelPhysicsIntegration::GetImpactDetector() {
+#ifdef USE_BULLET
+    return impact_detector;
+#else
+    return nullptr;
+#endif
 }

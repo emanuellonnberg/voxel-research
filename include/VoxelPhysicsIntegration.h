@@ -7,6 +7,10 @@
 #include <vector>
 #include <unordered_map>
 
+// Forward declarations
+class ParticleSystem;
+class ImpactDetector;
+
 /**
  * VoxelPhysicsIntegration
  *
@@ -153,6 +157,34 @@ public:
      */
     int ConvertSettledToStatic();
 
+    // ===== Impact Detection (Week 5 Day 28) =====
+
+    /**
+     * Enable impact detection with particle effects
+     * @param particle_system Particle system for spawning effects (must remain valid)
+     * @param impulse_threshold Minimum impulse to trigger effects (Newton-seconds)
+     *
+     * Requires Bullet Physics (USE_BULLET). When enabled, detects collisions
+     * and spawns material-specific particles based on impact intensity.
+     */
+    void EnableImpactDetection(ParticleSystem* particle_system, float impulse_threshold = 10.0f);
+
+    /**
+     * Disable impact detection
+     */
+    void DisableImpactDetection();
+
+    /**
+     * Check if impact detection is enabled
+     */
+    bool IsImpactDetectionEnabled() const;
+
+    /**
+     * Get impact detector (for advanced configuration)
+     * @return Pointer to impact detector, or nullptr if disabled
+     */
+    ImpactDetector* GetImpactDetector();
+
 private:
     // ===== Internal Data =====
 
@@ -201,6 +233,9 @@ private:
     float settling_linear_threshold;    // Linear velocity threshold (m/s)
     float settling_angular_threshold;   // Angular velocity threshold (rad/s)
     float settling_time_threshold;      // Time below thresholds (seconds)
+
+    // Week 5 Day 28: Impact detection
+    ImpactDetector* impact_detector;    // Impact detector (nullptr when disabled)
 
     // ===== Helper Functions =====
 
