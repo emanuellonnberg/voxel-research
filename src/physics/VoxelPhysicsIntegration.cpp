@@ -8,6 +8,8 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
     , voxel_density(1000.0f)  // Water density (1000 kg/m³)
     , friction(0.5f)
     , restitution(0.3f)
+    , fragmentation_enabled(true)       // Week 5 Day 25: Enable by default
+    , material_velocities_enabled(true) // Week 5 Day 25: Enable by default
 {
     if (!physics_engine) {
         throw std::runtime_error("VoxelPhysicsIntegration: physics_engine cannot be null");
@@ -38,51 +40,85 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
             continue;
         }
 
-        // Calculate physics properties
-        Vector3 center_of_mass = CalculateCenterOfMass(cluster);
-        float mass = CalculateMass(cluster);
-
-        // Create collision shape (convex hull from voxels)
-        CollisionShapeHandle shape = CreateConvexHullFromVoxels(cluster);
-        if (!shape) {
-            // Fallback to bounding box if convex hull fails
-            shape = CreateBoundingBoxFromVoxels(cluster);
+        // Week 5 Day 25: Fragment cluster based on material (if enabled)
+        std::vector<VoxelCluster> fragments;
+        
+        if (fragmentation_enabled && voxel_world) {
+            // Get material ID from first voxel in cluster
+            uint8_t material_id = MaterialDatabase::CONCRETE;  // Default
+            if (!cluster.voxel_positions.empty()) {
+                Voxel voxel = voxel_world->GetVoxel(cluster.voxel_positions[0]);
+                if (voxel.is_active) {
+                    material_id = voxel.material_id;
+                }
+            }
+            
+            // Fragment based on material
+            fragments = fragmenter.FractureCluster(cluster, material_id);
+        } else {
+            // No fragmentation - use original cluster
+            fragments = {cluster};
         }
 
-        if (!shape) {
-            std::cerr << "[VoxelPhysicsIntegration] Failed to create shape for cluster "
-                      << cluster.cluster_id << "\n";
-            continue;
+        // Spawn each fragment as a separate debris body
+        for (const auto& fragment : fragments) {
+            if (fragment.voxel_positions.empty()) {
+                continue;
+            }
+
+            // Calculate physics properties
+            Vector3 center_of_mass = CalculateCenterOfMass(fragment);
+            float mass = CalculateMass(fragment);
+
+            // Create collision shape (convex hull from voxels)
+            CollisionShapeHandle shape = CreateConvexHullFromVoxels(fragment);
+            if (!shape) {
+                // Fallback to bounding box if convex hull fails
+                shape = CreateBoundingBoxFromVoxels(fragment);
+            }
+
+            if (!shape) {
+                std::cerr << "[VoxelPhysicsIntegration] Failed to create shape for fragment\n";
+                continue;
+            }
+
+            // Create rigid body
+            RigidBodyDesc desc;
+            desc.transform.position = center_of_mass;
+            desc.transform.rotation = Quaternion::Identity();
+            desc.mass = mass;
+            desc.linear_damping = 0.1f;   // Slight air resistance
+            desc.angular_damping = 0.1f;  // Slight rotational damping
+            desc.friction = friction;
+            desc.restitution = restitution;
+            desc.kinematic = false;  // Dynamic body
+
+            PhysicsBodyHandle body = physics_engine->CreateRigidBody(desc);
+            if (!body) {
+                std::cerr << "[VoxelPhysicsIntegration] Failed to create body for fragment\n";
+                physics_engine->DestroyShape(shape);
+                continue;
+            }
+
+            // Attach shape to body
+            physics_engine->AttachShape(body, shape);
+
+            // Week 5 Day 25: Apply material-specific velocity
+            if (material_velocities_enabled && voxel_world && !fragment.voxel_positions.empty()) {
+                Voxel voxel = voxel_world->GetVoxel(fragment.voxel_positions[0]);
+                if (voxel.is_active) {
+                    ApplyMaterialVelocity(body, voxel.material_id);
+                }
+            }
+
+            // Track debris
+            debris_bodies.emplace_back(body, shape, cluster.cluster_id, fragment.voxel_positions.size());
+
+            spawned_count++;
         }
 
-        // Create rigid body
-        RigidBodyDesc desc;
-        desc.transform.position = center_of_mass;
-        desc.transform.rotation = Quaternion::Identity();
-        desc.mass = mass;
-        desc.linear_damping = 0.1f;   // Slight air resistance
-        desc.angular_damping = 0.1f;  // Slight rotational damping
-        desc.friction = friction;
-        desc.restitution = restitution;
-        desc.kinematic = false;  // Dynamic body
-
-        PhysicsBodyHandle body = physics_engine->CreateRigidBody(desc);
-        if (!body) {
-            std::cerr << "[VoxelPhysicsIntegration] Failed to create body for cluster "
-                      << cluster.cluster_id << "\n";
-            physics_engine->DestroyShape(shape);
-            continue;
-        }
-
-        // Attach shape to body
-        physics_engine->AttachShape(body, shape);
-
-        // Track debris
-        size_t debris_index = debris_bodies.size();
-        debris_bodies.emplace_back(body, shape, cluster.cluster_id, cluster.voxel_positions.size());
-        cluster_to_debris[cluster.cluster_id] = debris_index;
-
-        spawned_count++;
+        // Mark original cluster as spawned (even if fragmented)
+        cluster_to_debris[cluster.cluster_id] = debris_bodies.size() - 1;
     }
 
     if (spawned_count > 0) {
@@ -290,4 +326,87 @@ CollisionShapeHandle VoxelPhysicsIntegration::CreateBoundingBoxFromVoxels(const 
 
     BoxShapeDesc desc(half_extents);
     return physics_engine->CreateBoxShape(desc);
+}
+
+// ===== Week 5 Day 25: Material-Specific Behaviors =====
+
+void VoxelPhysicsIntegration::SetFragmentationEnabled(bool enable) {
+    fragmentation_enabled = enable;
+}
+
+void VoxelPhysicsIntegration::SetMaterialVelocitiesEnabled(bool enable) {
+    material_velocities_enabled = enable;
+}
+
+void VoxelPhysicsIntegration::ApplyMaterialVelocity(PhysicsBodyHandle body, uint8_t material_id) {
+    if (!body || !material_velocities_enabled) {
+        return;
+    }
+
+    // Material-specific initial velocities
+    Vector3 linear_vel(0, 0, 0);
+    Vector3 angular_vel(0, 0, 0);
+
+    if (material_id == MaterialDatabase::WOOD) {
+        // Wood: Tumbles as it falls
+        linear_vel = Vector3(0, -1.0f, 0);  // Mostly downward
+        
+        // Medium spin
+        float spin = 5.0f;
+        angular_vel = Vector3(
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin)
+        );
+    }
+    else if (material_id == MaterialDatabase::CONCRETE) {
+        // Concrete: Falls with slight randomness
+        linear_vel = Vector3(
+            fragmenter.RandomRange(-0.5f, 0.5f),
+            -1.0f,
+            fragmenter.RandomRange(-0.5f, 0.5f)
+        );
+        
+        // Low spin
+        float spin = 2.0f;
+        angular_vel = Vector3(
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin)
+        );
+    }
+    else if (material_id == MaterialDatabase::BRICK) {
+        // Brick: Similar to concrete but less random
+        linear_vel = Vector3(
+            fragmenter.RandomRange(-0.3f, 0.3f),
+            -1.5f,
+            fragmenter.RandomRange(-0.3f, 0.3f)
+        );
+        
+        // Low spin
+        float spin = 3.0f;
+        angular_vel = Vector3(
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin)
+        );
+    }
+    else {
+        // Default: Simple fall
+        linear_vel = Vector3(0, -1.0f, 0);
+        
+        float spin = 2.0f;
+        angular_vel = Vector3(
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin),
+            fragmenter.RandomRange(-spin, spin)
+        );
+    }
+
+    // Apply linear velocity to physics body
+    physics_engine->SetBodyLinearVelocity(body, linear_vel);
+
+    // Note: Angular velocity would need to be set during body creation
+    // via RigidBodyDesc.angular_velocity. For now, we only set linear velocity.
+    // TODO: Enhance to support angular velocity via recreation or new API
 }

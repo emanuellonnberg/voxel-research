@@ -3,6 +3,7 @@
 #include "IPhysicsEngine.h"
 #include "VoxelCluster.h"
 #include "VoxelWorld.h"
+#include "VoxelFragmentation.h"
 #include <vector>
 #include <unordered_map>
 
@@ -89,6 +90,22 @@ public:
      */
     void SetDebrisMaterial(float friction, float restitution);
 
+    /**
+     * Enable/disable material-specific fracture patterns
+     * @param enable If true, clusters will fracture based on material type
+     *
+     * Week 5 Day 25: Material-specific fracture patterns
+     */
+    void SetFragmentationEnabled(bool enable);
+
+    /**
+     * Enable/disable material-specific initial velocities
+     * @param enable If true, debris will have velocities based on material
+     *
+     * Week 5 Day 25: Material-specific behaviors
+     */
+    void SetMaterialVelocitiesEnabled(bool enable);
+
     // ===== Queries =====
 
     /**
@@ -134,6 +151,11 @@ private:
     float friction;        // Surface friction
     float restitution;     // Bounciness
 
+    // Week 5 Day 25: Material-specific behaviors
+    bool fragmentation_enabled;         // Enable fracture patterns
+    bool material_velocities_enabled;   // Enable material-specific velocities
+    VoxelFragmentation fragmenter;      // Fracture pattern generator
+
     // ===== Helper Functions =====
 
     /**
@@ -168,4 +190,13 @@ private:
      * Fallback if convex hull generation fails
      */
     CollisionShapeHandle CreateBoundingBoxFromVoxels(const VoxelCluster& cluster);
+
+    /**
+     * Apply material-specific initial velocity to debris
+     * @param body Physics body handle
+     * @param material_id Material type
+     *
+     * Week 5 Day 25: Material-specific velocities
+     */
+    void ApplyMaterialVelocity(PhysicsBodyHandle body, uint8_t material_id);
 };

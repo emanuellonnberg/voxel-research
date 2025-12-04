@@ -120,8 +120,24 @@ voxel-research/
   - **Edge case validation (empty world, single voxel, etc.)**
   - **Repeated analysis consistency tests**
   - **All integration tests passing with Bullet Physics**
+- ✅ **Week 5 Day 25: Material-Specific Fracture Behaviors**
+  - **VoxelFragmentation system for realistic breakage patterns:**
+    - **Wood: Splits into 3-6 elongated splinters (along grain)**
+    - **Concrete: Fractures into 5-10 irregular chunks (Voronoi-like)**
+    - **Brick: Breaks into regular masonry units (grid-based)**
+    - **Glass: Shatters into many small shards (planned)**
+  - **Material-specific initial velocities:**
+    - **Wood: Tumbles with medium spin**
+    - **Concrete: Falls with randomness and low spin**
+    - **Brick: Similar to concrete but more controlled**
+  - **VoxelPhysicsIntegration enhancements:**
+    - **Automatic cluster fragmentation before debris spawn**
+    - **ConfigurableFragmentationEnabled/MaterialVelocitiesEnabled flags**
+    - **ApplyMaterialVelocity() for realistic motion**
+  - **14 fragmentation tests (11 passing)**
+  - **Enabled by default for realistic destruction**
 - ✅ Demo application with 6 test scenes
-- ✅ **310 unit tests (305 passing, 98.4%) ✓**
+- ✅ **325 unit tests (316 passing, 97.2%) ✓**
 
 ## Documentation
 

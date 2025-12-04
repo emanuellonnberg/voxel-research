@@ -125,6 +125,7 @@ add_library(VoxelCore
     # Structural analysis (Week 3-4)
     src/structural/StructuralAnalyzer.cpp
     src/structural/ParameterTuning.cpp
+    src/structural/VoxelFragmentation.cpp
 
     # Physics (Week 5 Day 22-23)
     $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
@@ -168,6 +169,7 @@ if(BUILD_TESTS)
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
+        tests/test_VoxelFragmentation.cpp
     )
 
     target_link_libraries(VoxelTests
