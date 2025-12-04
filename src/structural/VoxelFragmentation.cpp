@@ -82,6 +82,9 @@ std::vector<VoxelCluster> VoxelFragmentation::SplitIntoSplinters(
         float slice_min = min_coord + i * step;
         float slice_max = min_coord + (i + 1) * step;
 
+        // For last slice, include everything up to and including max_coord
+        bool is_last = (i == num_splinters - 1);
+
         // Collect voxels in this slice
         for (const auto& pos : cluster.voxel_positions) {
             float coord;
@@ -93,7 +96,10 @@ std::vector<VoxelCluster> VoxelFragmentation::SplitIntoSplinters(
                 coord = pos.z;
             }
 
-            if (coord >= slice_min && coord < slice_max) {
+            bool in_slice = (coord >= slice_min && coord < slice_max) ||
+                           (is_last && coord >= slice_min && coord <= slice_max + 0.001f);
+
+            if (in_slice) {
                 splinter.voxel_positions.push_back(pos);
             }
         }
@@ -210,11 +216,20 @@ std::vector<VoxelCluster> VoxelFragmentation::SplitIntoMasonryUnits(
                 float max_z = cluster.bounds.min.z + (iz + 1) * step_z;
 
                 // Collect voxels in this unit
+                // For last units in each dimension, include boundary voxels
+                bool is_last_x = (ix == splits_x - 1);
+                bool is_last_y = (iy == splits_y - 1);
+                bool is_last_z = (iz == splits_z - 1);
+
                 for (const auto& pos : cluster.voxel_positions) {
-                    if (pos.x >= min_x && pos.x < max_x &&
-                        pos.y >= min_y && pos.y < max_y &&
-                        pos.z >= min_z && pos.z < max_z)
-                    {
+                    bool in_x = (pos.x >= min_x && pos.x < max_x) ||
+                               (is_last_x && pos.x >= min_x && pos.x <= max_x + 0.001f);
+                    bool in_y = (pos.y >= min_y && pos.y < max_y) ||
+                               (is_last_y && pos.y >= min_y && pos.y <= max_y + 0.001f);
+                    bool in_z = (pos.z >= min_z && pos.z < max_z) ||
+                               (is_last_z && pos.z >= min_z && pos.z <= max_z + 0.001f);
+
+                    if (in_x && in_y && in_z) {
                         unit.voxel_positions.push_back(pos);
                     }
                 }

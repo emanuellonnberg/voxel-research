@@ -16,6 +16,14 @@ protected:
         integration = nullptr;
     }
 
+    // Helper: Create integration with fragmentation disabled (for legacy tests)
+    VoxelPhysicsIntegration* CreateIntegrationNoFragmentation() {
+        auto* integ = new VoxelPhysicsIntegration(physics, world);
+        integ->SetFragmentationEnabled(false);  // Disable for predictable test results
+        integ->SetMaterialVelocitiesEnabled(false);
+        return integ;
+    }
+
     void TearDown() override {
         delete integration;
         physics->Shutdown();
@@ -44,7 +52,7 @@ protected:
 // ===== Basic Tests =====
 
 TEST_F(VoxelPhysicsIntegrationTest, Initialize) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     EXPECT_EQ(integration->GetDebrisCount(), 0);
     EXPECT_EQ(integration->GetPhysicsEngine(), physics);
@@ -66,7 +74,7 @@ TEST_F(VoxelPhysicsIntegrationTest, Initialize_NullWorldAllowed) {
 // ===== Debris Spawning =====
 
 TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_SingleCluster) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Create a cluster with 5 voxels
     std::vector<VoxelCluster> clusters;
@@ -80,7 +88,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_SingleCluster) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_MultipleClusters) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     std::vector<VoxelCluster> clusters;
     clusters.push_back(CreateTestCluster(1, 3, Vector3(0, 10, 0)));
@@ -97,7 +105,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_MultipleClusters) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_PreventDuplicates) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     std::vector<VoxelCluster> clusters;
     clusters.push_back(CreateTestCluster(1, 5, Vector3(0, 10, 0)));
@@ -114,7 +122,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_PreventDuplicates) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_EmptyCluster) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Create empty cluster
     VoxelCluster empty_cluster;
@@ -133,7 +141,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_EmptyCluster) {
 // ===== Debris Management =====
 
 TEST_F(VoxelPhysicsIntegrationTest, ClearDebris) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Spawn some debris
     std::vector<VoxelCluster> clusters;
@@ -151,7 +159,7 @@ TEST_F(VoxelPhysicsIntegrationTest, ClearDebris) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, RemoveOutOfBoundsDebris) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Spawn debris at different heights
     std::vector<VoxelCluster> clusters;
@@ -175,7 +183,7 @@ TEST_F(VoxelPhysicsIntegrationTest, RemoveOutOfBoundsDebris) {
 // ===== Configuration =====
 
 TEST_F(VoxelPhysicsIntegrationTest, SetVoxelDensity) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Should not crash
     integration->SetVoxelDensity(500.0f);
@@ -183,7 +191,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SetVoxelDensity) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, SetDebrisMaterial) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Should not crash
     integration->SetDebrisMaterial(0.8f, 0.5f);
@@ -192,7 +200,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SetDebrisMaterial) {
 // ===== Physics Integration =====
 
 TEST_F(VoxelPhysicsIntegrationTest, Step_UpdatesPhysics) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Spawn debris
     std::vector<VoxelCluster> clusters;
@@ -217,7 +225,7 @@ TEST_F(VoxelPhysicsIntegrationTest, BulletEngine_DebrisFalls) {
     physics->Initialize();
     physics->SetGravity(Vector3(0, -9.81f, 0));
 
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Spawn debris at y=100
     std::vector<VoxelCluster> clusters;
@@ -244,7 +252,7 @@ TEST_F(VoxelPhysicsIntegrationTest, DISABLED_BulletEngine_RemoveFallenDebris) {
     physics->Initialize();
     physics->SetGravity(Vector3(0, -9.81f, 0));
 
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Spawn debris high up
     std::vector<VoxelCluster> clusters;
@@ -270,7 +278,7 @@ TEST_F(VoxelPhysicsIntegrationTest, DISABLED_BulletEngine_RemoveFallenDebris) {
 // ===== Edge Cases =====
 
 TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_VeryLargeCluster) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Create a large cluster (100 voxels)
     std::vector<VoxelCluster> clusters;
@@ -283,7 +291,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_VeryLargeCluster) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_SingleVoxelCluster) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Create a tiny cluster (1 voxel)
     std::vector<VoxelCluster> clusters;
@@ -296,7 +304,7 @@ TEST_F(VoxelPhysicsIntegrationTest, SpawnDebris_SingleVoxelCluster) {
 }
 
 TEST_F(VoxelPhysicsIntegrationTest, MultipleSpawnCalls) {
-    integration = new VoxelPhysicsIntegration(physics, world);
+    integration = CreateIntegrationNoFragmentation();
 
     // Spawn first batch
     std::vector<VoxelCluster> batch1;
