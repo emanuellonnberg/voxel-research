@@ -117,10 +117,11 @@ add_library(VoxelCore
     src/voxel/VoxelCluster.cpp
     src/voxel/VoxelStability.cpp
 
-    # Rendering (Week 1 Day 3, Week 5 Day 28)
+    # Rendering (Week 1 Day 3, Week 5 Day 28, Week 7 Day 32)
     src/rendering/Camera.cpp
     src/rendering/Renderer.cpp
     src/rendering/ParticleSystem.cpp
+    src/rendering/VisualFeedback.cpp
 
     # Structural analysis (Week 3-4)
     src/structural/StructuralAnalyzer.cpp
@@ -181,6 +182,7 @@ if(BUILD_TESTS)
         tests/test_RubbleSystem.cpp
         tests/test_ParticleSystem.cpp
         tests/test_turn_manager.cpp
+        tests/test_visual_feedback.cpp
     )
 
     target_link_libraries(VoxelTests
