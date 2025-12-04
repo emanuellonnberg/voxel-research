@@ -141,9 +141,10 @@ target_include_directories(VoxelCore PUBLIC
     $<$<BOOL:${USE_BULLET}>:${CMAKE_SOURCE_DIR}/third_party/bullet3/src>
 )
 
-# Link libraries
+# Link Bullet libraries if enabled
 if(USE_BULLET)
     target_link_libraries(VoxelCore PUBLIC ${BULLET_LIBRARIES})
+    target_compile_definitions(VoxelCore PUBLIC USE_BULLET)
 endif()
 
 # Link OpenGL libraries if rendering is enabled
@@ -199,7 +200,7 @@ if(BUILD_TESTS)
     gtest_discover_tests(VoxelTests)
 endif()
 
-# Examples (Day 20: Benchmark suite)
+# Examples (Day 20: Benchmark suite, Week 7 Day 34: Performance Profiling)
 if(BUILD_EXAMPLES)
     add_executable(BenchmarkStructuralAnalysis
         examples/benchmark_structural_analysis.cpp
@@ -218,10 +219,17 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(FullDestructionDemo VoxelCore)
 
-    # Define USE_BULLET for demos if enabled
+    # Week 7 Day 34: Performance profiling with large-scale verification
+    add_executable(PerformanceProfiling
+        examples/performance_profiling.cpp
+    )
+    target_link_libraries(PerformanceProfiling VoxelCore)
+
+    # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
         target_compile_definitions(FullDestructionDemo PRIVATE USE_BULLET)
+        target_compile_definitions(PerformanceProfiling PRIVATE USE_BULLET)
     endif()
 endif()
 

@@ -92,4 +92,7 @@ public:
     int GetBodyCount() const override;
     const char* GetEngineName() const override;
     const char* GetEngineVersion() const override;
+
+    // ===== Week 5 Day 28: Access for ImpactDetector =====
+    btDiscreteDynamicsWorld* GetDynamicsWorld() { return dynamics_world; }
 };
