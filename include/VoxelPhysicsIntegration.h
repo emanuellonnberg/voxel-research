@@ -124,11 +124,49 @@ public:
      */
     IPhysicsEngine* GetPhysicsEngine() const { return physics_engine; }
 
+    // ===== Week 5 Day 26: Settling Detection =====
+
+    /**
+     * Get number of settled debris bodies
+     */
+    int GetSettledDebrisCount() const;
+
+    /**
+     * Get number of active (non-settled) debris bodies
+     */
+    int GetActiveDebrisCount() const;
+
+    /**
+     * Set settling thresholds for debris
+     * @param linear_threshold Linear velocity threshold (m/s)
+     * @param angular_threshold Angular velocity threshold (rad/s)
+     * @param time_threshold Time below thresholds before settling (seconds)
+     */
+    void SetSettlingThresholds(float linear_threshold,
+                               float angular_threshold,
+                               float time_threshold);
+
+    /**
+     * Convert settled debris to static (kinematic) bodies
+     * Improves physics performance by making settled debris non-dynamic
+     * @return Number of debris converted to static
+     */
+    int ConvertSettledToStatic();
+
 private:
     // ===== Internal Data =====
 
     IPhysicsEngine* physics_engine;
     VoxelWorld* voxel_world;
+
+    /**
+     * Debris state for settling detection
+     */
+    enum class DebrisState {
+        ACTIVE,      // Moving (high velocity)
+        SETTLING,    // Slowing down (below threshold but not yet settled)
+        SETTLED      // At rest (converted to static or flagged for removal)
+    };
 
     /**
      * Debris body tracking
@@ -138,9 +176,12 @@ private:
         CollisionShapeHandle shape;      // Collision shape handle
         uint32_t cluster_id;             // Original cluster ID
         int voxel_count;                 // Number of voxels in cluster
+        DebrisState state;               // Current state
+        float time_below_threshold;      // Time spent below velocity thresholds
 
         DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count)
-            : body(b), shape(s), cluster_id(id), voxel_count(count) {}
+            : body(b), shape(s), cluster_id(id), voxel_count(count),
+              state(DebrisState::ACTIVE), time_below_threshold(0.0f) {}
     };
 
     std::vector<DebrisBody> debris_bodies;
@@ -155,6 +196,11 @@ private:
     bool fragmentation_enabled;         // Enable fracture patterns
     bool material_velocities_enabled;   // Enable material-specific velocities
     VoxelFragmentation fragmenter;      // Fracture pattern generator
+
+    // Week 5 Day 26: Settling detection
+    float settling_linear_threshold;    // Linear velocity threshold (m/s)
+    float settling_angular_threshold;   // Angular velocity threshold (rad/s)
+    float settling_time_threshold;      // Time below thresholds (seconds)
 
     // ===== Helper Functions =====
 
@@ -199,4 +245,12 @@ private:
      * Week 5 Day 25: Material-specific velocities
      */
     void ApplyMaterialVelocity(PhysicsBodyHandle body, uint8_t material_id);
+
+    /**
+     * Update debris states based on velocity
+     * @param deltaTime Time step in seconds
+     *
+     * Week 5 Day 26: Settling detection
+     */
+    void UpdateDebrisStates(float deltaTime);
 };

@@ -10,6 +10,9 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
     , restitution(0.3f)
     , fragmentation_enabled(true)       // Week 5 Day 25: Enable by default
     , material_velocities_enabled(true) // Week 5 Day 25: Enable by default
+    , settling_linear_threshold(0.1f)   // Week 5 Day 26: 0.1 m/s
+    , settling_angular_threshold(0.2f)  // Week 5 Day 26: 0.2 rad/s
+    , settling_time_threshold(0.5f)     // Week 5 Day 26: 0.5 seconds
 {
     if (!physics_engine) {
         throw std::runtime_error("VoxelPhysicsIntegration: physics_engine cannot be null");
@@ -136,6 +139,9 @@ void VoxelPhysicsIntegration::Step(float deltaTime) {
 
     // Step physics simulation
     physics_engine->Step(deltaTime);
+
+    // Week 5 Day 26: Update debris settling states
+    UpdateDebrisStates(deltaTime);
 
     // Optional: Sync debris positions back to voxel world
     // (If you want to visualize debris movement in the voxel grid)
@@ -409,4 +415,103 @@ void VoxelPhysicsIntegration::ApplyMaterialVelocity(PhysicsBodyHandle body, uint
     // Note: Angular velocity would need to be set during body creation
     // via RigidBodyDesc.angular_velocity. For now, we only set linear velocity.
     // TODO: Enhance to support angular velocity via recreation or new API
+}
+
+// ===== Week 5 Day 26: Settling Detection =====
+
+int VoxelPhysicsIntegration::GetSettledDebrisCount() const {
+    int count = 0;
+    for (const auto& debris : debris_bodies) {
+        if (debris.state == DebrisState::SETTLED) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int VoxelPhysicsIntegration::GetActiveDebrisCount() const {
+    int count = 0;
+    for (const auto& debris : debris_bodies) {
+        if (debris.state == DebrisState::ACTIVE || debris.state == DebrisState::SETTLING) {
+            count++;
+        }
+    }
+    return count;
+}
+
+void VoxelPhysicsIntegration::SetSettlingThresholds(float linear_threshold,
+                                                     float angular_threshold,
+                                                     float time_threshold) {
+    settling_linear_threshold = linear_threshold;
+    settling_angular_threshold = angular_threshold;
+    settling_time_threshold = time_threshold;
+}
+
+void VoxelPhysicsIntegration::UpdateDebrisStates(float deltaTime) {
+    if (!physics_engine) {
+        return;
+    }
+
+    for (auto& debris : debris_bodies) {
+        // Skip already settled debris
+        if (debris.state == DebrisState::SETTLED) {
+            continue;
+        }
+
+        // Get current linear velocity
+        Vector3 linear_vel = physics_engine->GetBodyLinearVelocity(debris.body);
+        float linear_speed = linear_vel.Length();
+
+        // Note: We only check linear velocity since IPhysicsEngine doesn't expose
+        // GetBodyAngularVelocity(). This is sufficient for basic settling detection.
+        // Week 5 Day 26: settling_angular_threshold is reserved for future use.
+
+        // Check if below linear threshold
+        bool below_threshold = (linear_speed < settling_linear_threshold);
+
+        if (below_threshold) {
+            // Increment time below threshold
+            debris.time_below_threshold += deltaTime;
+
+            // Check if settled for long enough
+            if (debris.time_below_threshold >= settling_time_threshold) {
+                debris.state = DebrisState::SETTLED;
+            } else {
+                debris.state = DebrisState::SETTLING;
+            }
+        } else {
+            // Above threshold - reset to active
+            debris.state = DebrisState::ACTIVE;
+            debris.time_below_threshold = 0.0f;
+        }
+    }
+}
+
+int VoxelPhysicsIntegration::ConvertSettledToStatic() {
+    if (!physics_engine) {
+        return 0;
+    }
+
+    // Note: IPhysicsEngine doesn't currently expose SetBodyKinematic() to change
+    // a body's kinematic status after creation. This would require either:
+    // 1. Adding SetBodyKinematic() to IPhysicsEngine interface
+    // 2. Recreating bodies as kinematic (expensive)
+    // 3. Just using the state tracking for queries (current approach)
+    //
+    // For now, we just track settled state without converting to kinematic.
+    // The state information is still useful for:
+    // - Optimizing updates (skip settled debris)
+    // - Culling settled debris that are out of view
+    // - Statistics and debugging
+    //
+    // Week 5 Day 26: This is acceptable for the prototype.
+
+    int settled_count = GetSettledDebrisCount();
+
+    if (settled_count > 0) {
+        std::cout << "[VoxelPhysicsIntegration] " << settled_count
+                  << " debris are settled (state tracked, not converted to kinematic)\n";
+    }
+
+    return settled_count;
 }

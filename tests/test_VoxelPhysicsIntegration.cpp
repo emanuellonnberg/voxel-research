@@ -326,3 +326,152 @@ TEST_F(VoxelPhysicsIntegrationTest, MultipleSpawnCalls) {
     EXPECT_TRUE(integration->IsClusterSpawned(3));
     EXPECT_TRUE(integration->IsClusterSpawned(4));
 }
+
+// ===== Week 5 Day 26: Settling Detection Tests =====
+
+TEST_F(VoxelPhysicsIntegrationTest, SettlingDetection_InitiallyActive) {
+    integration = CreateIntegrationNoFragmentation();
+
+    // Spawn debris
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 5, Vector3(0, 10, 0)));
+    integration->SpawnDebris(clusters);
+
+    // Initially, all debris should be active
+    EXPECT_EQ(integration->GetActiveDebrisCount(), 1);
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 0);
+}
+
+TEST_F(VoxelPhysicsIntegrationTest, SettlingDetection_BecomesSettled) {
+    integration = CreateIntegrationNoFragmentation();
+
+    // Disable gravity so debris can settle (otherwise they keep accelerating)
+    physics->SetGravity(Vector3::Zero());
+
+    // Set very low settling thresholds to trigger settling quickly
+    integration->SetSettlingThresholds(0.01f, 0.01f, 0.1f);  // 0.01 m/s, 0.1 seconds
+
+    // Spawn debris at rest (MockPhysicsEngine initializes with zero velocity)
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 5, Vector3(0, 0, 0)));
+    integration->SpawnDebris(clusters);
+
+    // Step simulation enough to trigger settling (0.1 seconds)
+    for (int i = 0; i < 10; i++) {
+        integration->Step(0.02f);  // 10 steps * 0.02s = 0.2s > 0.1s threshold
+    }
+
+    // Debris should now be settled
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 1);
+    EXPECT_EQ(integration->GetActiveDebrisCount(), 0);
+}
+
+TEST_F(VoxelPhysicsIntegrationTest, SettlingDetection_MultipleDebris) {
+    integration = CreateIntegrationNoFragmentation();
+
+    // Disable gravity so debris can settle
+    physics->SetGravity(Vector3::Zero());
+
+    integration->SetSettlingThresholds(0.01f, 0.01f, 0.1f);
+
+    // Spawn multiple debris
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 3, Vector3(0, 0, 0)));
+    clusters.push_back(CreateTestCluster(2, 5, Vector3(10, 0, 0)));
+    clusters.push_back(CreateTestCluster(3, 2, Vector3(20, 0, 0)));
+    integration->SpawnDebris(clusters);
+
+    // Step until settled
+    for (int i = 0; i < 10; i++) {
+        integration->Step(0.02f);
+    }
+
+    // All debris should be settled
+    EXPECT_EQ(integration->GetDebrisCount(), 3);
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 3);
+    EXPECT_EQ(integration->GetActiveDebrisCount(), 0);
+}
+
+TEST_F(VoxelPhysicsIntegrationTest, SettlingDetection_ThresholdConfiguration) {
+    integration = CreateIntegrationNoFragmentation();
+
+    // Disable gravity so debris can settle
+    physics->SetGravity(Vector3::Zero());
+
+    // Test default thresholds exist
+    EXPECT_EQ(integration->GetActiveDebrisCount(), 0);
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 0);
+
+    // Set custom thresholds
+    integration->SetSettlingThresholds(0.5f, 1.0f, 2.0f);
+
+    // Spawn debris
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 5, Vector3(0, 0, 0)));
+    integration->SpawnDebris(clusters);
+
+    // With higher thresholds and longer time, settling should take longer
+    integration->Step(0.5f);  // Only 0.5s, less than 2.0s threshold
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 0);  // Not settled yet
+
+    // Step more
+    for (int i = 0; i < 10; i++) {
+        integration->Step(0.3f);  // 10 * 0.3s = 3.0s > 2.0s threshold
+    }
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 1);  // Now settled
+}
+
+TEST_F(VoxelPhysicsIntegrationTest, ConvertSettledToStatic) {
+    integration = CreateIntegrationNoFragmentation();
+
+    // Disable gravity so debris can settle
+    physics->SetGravity(Vector3::Zero());
+
+    integration->SetSettlingThresholds(0.01f, 0.01f, 0.1f);
+
+    // Spawn debris
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 5, Vector3(0, 0, 0)));
+    clusters.push_back(CreateTestCluster(2, 3, Vector3(10, 0, 0)));
+    integration->SpawnDebris(clusters);
+
+    // Step until settled
+    for (int i = 0; i < 10; i++) {
+        integration->Step(0.02f);
+    }
+
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 2);
+
+    // Call convert (note: this doesn't actually convert in the current implementation,
+    // just reports the settled count)
+    int converted = integration->ConvertSettledToStatic();
+    EXPECT_EQ(converted, 2);
+}
+
+TEST_F(VoxelPhysicsIntegrationTest, SettlingDetection_ClearDebrisResetsStates) {
+    integration = CreateIntegrationNoFragmentation();
+
+    // Disable gravity so debris can settle
+    physics->SetGravity(Vector3::Zero());
+
+    integration->SetSettlingThresholds(0.01f, 0.01f, 0.1f);
+
+    // Spawn and settle debris
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 5, Vector3(0, 0, 0)));
+    integration->SpawnDebris(clusters);
+
+    for (int i = 0; i < 10; i++) {
+        integration->Step(0.02f);
+    }
+
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 1);
+
+    // Clear all debris
+    integration->ClearDebris();
+
+    // Counts should be reset
+    EXPECT_EQ(integration->GetDebrisCount(), 0);
+    EXPECT_EQ(integration->GetSettledDebrisCount(), 0);
+    EXPECT_EQ(integration->GetActiveDebrisCount(), 0);
+}

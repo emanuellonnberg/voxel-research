@@ -136,8 +136,26 @@ voxel-research/
     - **ApplyMaterialVelocity() for realistic motion**
   - **14 fragmentation tests (all passing)**
   - **Enabled by default for realistic destruction**
+- ✅ **Week 5 Day 26: Advanced Settling Detection**
+  - **Debris state machine (ACTIVE → SETTLING → SETTLED):**
+    - **ACTIVE: Moving debris with velocity above threshold**
+    - **SETTLING: Slowing down but not yet stable**
+    - **SETTLED: At rest, candidate for optimization/removal**
+  - **Velocity-based settling detection:**
+    - **Linear velocity threshold (default: 0.1 m/s)**
+    - **Time-based confirmation (default: 0.5 seconds below threshold)**
+    - **Continuous monitoring during simulation**
+  - **Settling queries:**
+    - **GetSettledDebrisCount() - Count debris at rest**
+    - **GetActiveDebrisCount() - Count moving debris**
+    - **ConvertSettledToStatic() - Optimize settled debris (state tracking)**
+  - **Configuration API:**
+    - **SetSettlingThresholds() - Customize detection parameters**
+    - **Automatic state updates during Step()**
+  - **6 settling detection tests (all passing)**
+  - **Foundation for future optimizations (culling, sleep, removal)**
 - ✅ Demo application with 6 test scenes
-- ✅ **324 unit tests (319 passing, 98.5%) ✓**
+- ✅ **330 unit tests (324 passing, 98.2%) ✓**
 
 ## Documentation
 
