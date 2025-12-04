@@ -192,8 +192,20 @@ voxel-research/
   - **Configuration options:**
     - **Adjustable gravity and air resistance**
     - **Particle fade-out over lifetime (alpha blending)**
+  - **ImpactDetector system (Bullet Physics integration):**
+    - **Automatic collision detection via Bullet callbacks**
+    - **Impact event tracking (position, normal, impulse, material)**
+    - **Configurable impulse threshold for filtering**
+    - **Body-to-material mapping for accurate effects**
+    - **Logarithmic intensity scaling from collision force**
+    - **Automatic particle spawning on debris impacts**
+  - **VoxelPhysicsIntegration enhancements:**
+    - **EnableImpactDetection() - Activate particle spawning**
+    - **Material registration for debris bodies**
+    - **Automatic detection during Step() when enabled**
+    - **Zero overhead when disabled**
   - **24 comprehensive tests (all passing)**
-  - **Foundation for visual polish and impact feedback**
+  - **Complete physics-to-visuals pipeline ready!**
 - ✅ **OpenGL Dependencies Setup (GLM, GLFW, GLAD)**
   - **GLM (OpenGL Mathematics) as submodule - Header-only math library**
   - **GLFW (Graphics Library Framework) as submodule - Window/context creation**
