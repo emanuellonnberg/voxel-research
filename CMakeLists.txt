@@ -231,12 +231,19 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(ScenarioTests VoxelCore)
 
+    # Week 8 Day 35: Showcase demo
+    add_executable(ShowcaseDemo
+        examples/showcase_demo.cpp
+    )
+    target_link_libraries(ShowcaseDemo VoxelCore)
+
     # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
         target_compile_definitions(FullDestructionDemo PRIVATE USE_BULLET)
         target_compile_definitions(PerformanceProfiling PRIVATE USE_BULLET)
         target_compile_definitions(ScenarioTests PRIVATE USE_BULLET)
+        target_compile_definitions(ShowcaseDemo PRIVATE USE_BULLET)
     endif()
 endif()
 

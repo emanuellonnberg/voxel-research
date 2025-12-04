@@ -21,7 +21,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 7 Day 33)
+### Current (Week 8 Day 35)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -153,6 +153,18 @@ voxel-research/
   - **Automated performance report generation**
   - **All targets met: Track 1 < 500ms, Track 3 > 30 FPS**
   - **Results: 3-58ms structural analysis, 113K+ FPS physics equivalent**
+- ✅ **Week 8 Day 35: Showcase Demo**
+  - **Comprehensive showcase executable demonstrating all features**
+  - **4 automated demo scenarios:**
+    - **Tower Collapse - Simple vertical structure destruction**
+    - **Building Corner Column - Complex multi-column failure**
+    - **Material Comparison - Wood vs Concrete vs Brick behaviors**
+    - **Turn-Based Integration - Complete phase cycle demonstration**
+  - **Beautiful console UI with formatted output**
+  - **Real-time performance statistics display**
+  - **Complete pipeline demonstration: Setup → Damage → Analysis → Physics**
+  - **Professional presentation suitable for portfolio/showcase**
+  - **All demos complete in < 15 seconds total runtime**
 - ✅ Demo application with 6 test scenes
 - ✅ **401 unit tests (all passing, 100%) ✓**
 
