@@ -172,6 +172,28 @@ voxel-research/
     - **Environmental effects and rendering**
   - **14 rubble system tests (all passing)**
   - **Standalone system ready for integration**
+- ✅ **Week 5 Day 28: Particle Effects System**
+  - **Particle struct with physics properties:**
+    - **Position, velocity, color (RGBA), size, lifetime, age**
+    - **IsAlive() and GetFade() for lifecycle management**
+  - **ParticleSystem class for visual effects:**
+    - **Spawn() - Create particles with customizable properties**
+    - **Update() - Physics simulation (gravity, air resistance, aging)**
+    - **Automatic cleanup of dead particles**
+    - **Max particle limit for performance control**
+  - **Material-specific impact effects:**
+    - **SpawnConcreteImpact() - Dust clouds + rock chips**
+    - **SpawnWoodImpact() - Splinters + sawdust (elongated, floaty)**
+    - **SpawnBrickImpact() - Reddish dust + brick pieces**
+    - **Intensity parameter scales particle count**
+  - **Environmental effects:**
+    - **SpawnDustCloud() - Large ambient dust for collapse epicenters**
+    - **Upward-biased velocity for realistic dust behavior**
+  - **Configuration options:**
+    - **Adjustable gravity and air resistance**
+    - **Particle fade-out over lifetime (alpha blending)**
+  - **24 comprehensive tests (all passing)**
+  - **Foundation for visual polish and impact feedback**
 - ✅ **OpenGL Dependencies Setup (GLM, GLFW, GLAD)**
   - **GLM (OpenGL Mathematics) as submodule - Header-only math library**
   - **GLFW (Graphics Library Framework) as submodule - Window/context creation**
@@ -180,7 +202,7 @@ voxel-research/
   - **RENDERING_ENABLED compile definition when available**
   - **Ready for future rendering features**
 - ✅ Demo application with 6 test scenes
-- ✅ **343 unit tests (336 passing, 98.0%) ✓**
+- ✅ **367 unit tests (362 passing, 98.6%) ✓**
 
 ## Documentation
 
