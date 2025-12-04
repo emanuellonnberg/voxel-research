@@ -208,9 +208,16 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(IntegrationDemo VoxelCore)
 
-    # Define USE_BULLET for demo if enabled
+    # Week 5 Day 30: Full destruction pipeline demo
+    add_executable(FullDestructionDemo
+        examples/full_destruction_demo.cpp
+    )
+    target_link_libraries(FullDestructionDemo VoxelCore)
+
+    # Define USE_BULLET for demos if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
+        target_compile_definitions(FullDestructionDemo PRIVATE USE_BULLET)
     endif()
 endif()
 

@@ -1,33 +1,11 @@
 #pragma once
 
 #include "Vector3.h"
+#include "Material.h"  // For Color struct
 #include <vector>
 #include <cstdint>
 
 // Week 5 Day 28: Particle Effects System
-
-/**
- * @brief RGBA color representation for particles
- */
-struct Color {
-    float r, g, b, a;
-
-    Color() : r(1.0f), g(1.0f), b(1.0f), a(1.0f) {}
-    Color(float red, float green, float blue, float alpha = 1.0f)
-        : r(red), g(green), b(blue), a(alpha) {}
-
-    static Color Gray(float brightness = 0.7f, float alpha = 0.5f) {
-        return Color(brightness, brightness, brightness * 0.9f, alpha);
-    }
-
-    static Color Brown(float alpha = 1.0f) {
-        return Color(0.55f, 0.35f, 0.2f, alpha);
-    }
-
-    static Color Red(float alpha = 1.0f) {
-        return Color(0.8f, 0.3f, 0.2f, alpha);
-    }
-};
 
 /**
  * @brief Individual particle for visual effects

@@ -6,23 +6,26 @@
 #include <cstdint>
 
 /**
- * Color - Simple RGB color representation
+ * Color - RGBA color representation
  */
 struct Color {
-    float r, g, b;
+    float r, g, b, a;
 
-    Color() : r(0), g(0), b(0) {}
-    Color(float r, float g, float b) : r(r), g(g), b(b) {}
+    Color() : r(0), g(0), b(0), a(1.0f) {}
+    Color(float r, float g, float b, float a = 1.0f) : r(r), g(g), b(b), a(a) {}
 
     // Named colors
     static Color Black() { return Color(0.0f, 0.0f, 0.0f); }
     static Color White() { return Color(1.0f, 1.0f, 1.0f); }
     static Color Red() { return Color(1.0f, 0.0f, 0.0f); }
+    static Color Red(float alpha) { return Color(0.8f, 0.3f, 0.2f, alpha); }
     static Color Green() { return Color(0.0f, 1.0f, 0.0f); }
     static Color Blue() { return Color(0.0f, 0.0f, 1.0f); }
     static Color Yellow() { return Color(1.0f, 1.0f, 0.0f); }
     static Color Brown() { return Color(0.6f, 0.4f, 0.2f); }
+    static Color Brown(float alpha) { return Color(0.55f, 0.35f, 0.2f, alpha); }
     static Color Gray() { return Color(0.5f, 0.5f, 0.5f); }
+    static Color Gray(float brightness, float alpha) { return Color(brightness, brightness, brightness * 0.9f, alpha); }
     static Color DarkGray() { return Color(0.3f, 0.3f, 0.3f); }
 
     // Linear interpolation
@@ -30,7 +33,8 @@ struct Color {
         return Color(
             a.r + (b.r - a.r) * t,
             a.g + (b.g - a.g) * t,
-            a.b + (b.b - a.b) * t
+            a.b + (b.b - a.b) * t,
+            a.a + (b.a - a.a) * t
         );
     }
 };
