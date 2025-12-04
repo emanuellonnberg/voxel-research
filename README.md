@@ -172,8 +172,15 @@ voxel-research/
     - **Environmental effects and rendering**
   - **14 rubble system tests (all passing)**
   - **Standalone system ready for integration**
+- ✅ **OpenGL Dependencies Setup (GLM, GLFW, GLAD)**
+  - **GLM (OpenGL Mathematics) as submodule - Header-only math library**
+  - **GLFW (Graphics Library Framework) as submodule - Window/context creation**
+  - **GLAD (OpenGL Loader) as submodule - Function loader for OpenGL 3.3 Core**
+  - **Optional OpenGL support (gracefully disabled when unavailable)**
+  - **RENDERING_ENABLED compile definition when available**
+  - **Ready for future rendering features**
 - ✅ Demo application with 6 test scenes
-- ✅ **344 unit tests (338 passing, 98.3%) ✓**
+- ✅ **343 unit tests (336 passing, 98.0%) ✓**
 
 ## Documentation
 
@@ -196,25 +203,27 @@ Comprehensive documentation is available in the `docs/` directory:
 ### Required
 - C++17 compatible compiler (GCC 7+, Clang 5+, MSVC 2017+)
 - CMake 3.15+
-- OpenGL 3.3+
+- OpenGL 3.3+ (optional, rendering features disabled if unavailable)
 
 ### Included as Submodules
 - **Bullet Physics 3.x** (physics simulation, zlib license)
+- **GLM** (OpenGL Mathematics - header-only math library)
+- **GLFW** (Graphics Library Framework - window/context creation)
+- **GLAD** (OpenGL Loader - function loader for OpenGL 3.3 Core)
 
 ### Optional (auto-downloaded if not found)
 - GoogleTest (testing framework)
-- GLM (math library, fallback available)
-- GLFW3 (windowing, needed for rendering in Week 1 Day 3)
 
 ## Building
 
 ### Linux/macOS
 
 ```bash
-# Install dependencies (Ubuntu/Debian)
-sudo apt-get install build-essential cmake libglfw3-dev libglm-dev
+# Install system dependencies (Ubuntu/Debian)
+# OpenGL is optional - if not available, rendering features will be disabled
+sudo apt-get install build-essential cmake libgl1-mesa-dev
 
-# Clone with submodules (or initialize if already cloned)
+# Clone with submodules (includes Bullet, GLM, GLFW, GLAD)
 git submodule update --init --recursive
 
 # Build
@@ -232,12 +241,15 @@ make
 ### Windows (Visual Studio)
 
 ```bash
-# Install dependencies via vcpkg
-vcpkg install glfw3 glm gtest
+# All dependencies are included as submodules - no vcpkg needed!
+# Just ensure you have OpenGL drivers installed (usually included with GPU drivers)
+
+# Clone with submodules
+git submodule update --init --recursive
 
 # Generate Visual Studio solution
 mkdir build && cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE=[vcpkg root]/scripts/buildsystems/vcpkg.cmake
+cmake ..
 
 # Open VoxelDestruction.sln in Visual Studio and build
 ```
