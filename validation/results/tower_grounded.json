@@ -1,0 +1,10 @@
+{
+  "structure_name": "tower_grounded",
+  "fem_solver": "analytical_connectivity",
+  "should_fail": false,
+  "failed_voxels": [],
+  "method_description": "BFS connectivity check - voxels not connected to ground fail",
+  "voxel_count": 5,
+  "damaged_count": 1,
+  "expected_failure": false
+}

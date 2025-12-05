@@ -224,9 +224,11 @@ voxel-research/
   - **Alternative to spring system using Dinic's max-flow algorithm**
   - **23x average speedup (0.98ms vs 13.93ms on benchmark suite)**
   - **100% deterministic - same damage always gives same result**
+  - **75% accuracy vs FEM ground truth (vs 50% for springs)**
+  - **FEM validation module with analytical ground truth**
   - **No iteration tuning required**
   - **Bidirectional flow network models Newton's 3rd law**
-  - **21 unit tests + comparison demo**
+  - **21 unit tests + comparison demo + FEM validation suite**
 
 ## Structural Analysis: Spring vs Max-Flow
 
@@ -251,11 +253,12 @@ auto result = analyzer.Analyze(world, damaged_positions);  // Same interface!
 ```
 - ✅ **23x faster** - Single-pass algorithm, no iterations
 - ✅ **Deterministic** - Perfectly reproducible results
-- ✅ **More accurate** - 95% match to FEM vs 85% for springs
+- ✅ **More accurate** - 75% FEM match vs 50% for springs (validated against ground truth)
 - ✅ **No tuning** - Just works out of the box
 - ⚠️ **Fewer parameters** - Less designer flexibility
+- ⚠️ **Conservative bias** - May predict failure for structures that could hold (safe for gameplay)
 
-**Use when:** You want maximum performance and deterministic behavior.
+**Use when:** You want maximum performance, determinism, and better accuracy.
 
 **Recommendation:** Start with **Max-Flow** for speed and reliability. Switch to **Spring** only if you need more control.
 

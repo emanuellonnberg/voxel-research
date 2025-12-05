@@ -178,6 +178,7 @@ if(BUILD_TESTS)
         tests/test_VoxelStability.cpp
         tests/test_StructuralAnalyzer.cpp
         tests/test_MaxFlowStructuralAnalyzer.cpp
+        tests/test_FEMValidation.cpp
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp

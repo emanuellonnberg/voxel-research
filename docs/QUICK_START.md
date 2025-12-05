@@ -187,7 +187,7 @@ Two analyzer options (same interface):
 // Option 1: Spring System (more parameters, easier tuning)
 StructuralAnalyzer analyzer;
 
-// Option 2: Max-Flow (23x faster, deterministic, more accurate)
+// Option 2: Max-Flow (23x faster, deterministic)
 // MaxFlowStructuralAnalyzer analyzer;
 
 auto result = analyzer.Analyze(world, damaged_positions, 500.0f);
