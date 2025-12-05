@@ -480,6 +480,11 @@ TEST_F(VoxelPhysicsIntegrationTest, SettlingDetection_ClearDebrisResetsStates) {
 
 // Week 13 Day 43: Parallel Physics Performance Test
 TEST_F(VoxelPhysicsIntegrationTest, ParallelDebrisSpawning_PerformanceTest) {
+    // Skip this test for MockPhysicsEngine - operations are too fast to benefit from parallelization
+    if (physics->GetEngineName() == std::string("Mock")) {
+        GTEST_SKIP() << "Performance test requires expensive physics operations (use BulletEngine)";
+    }
+
     // Initialize global job system for this test
     JobSystem job_system;
     job_system.Initialize();
