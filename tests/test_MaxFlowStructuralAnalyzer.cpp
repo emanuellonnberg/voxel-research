@@ -372,11 +372,12 @@ TEST_F(MaxFlowStructuralAnalyzerTest, NoDamagedPositions) {
 }
 
 TEST_F(MaxFlowStructuralAnalyzerTest, SingleVoxelNotOnGround) {
-    // Edge case: single voxel slightly above ground
+    // Edge case: single voxel clearly above ground (not within ground tolerance)
     float voxel_size = world.GetVoxelSize();
-    world.SetVoxel(Vector3(0, 0.1f * voxel_size, 0), Voxel(brick_id));
+    // Use 1 voxel above ground (well above the 0.01m ground tolerance)
+    world.SetVoxel(Vector3(0, voxel_size, 0), Voxel(brick_id));
 
-    auto result = analyzer.Analyze(world, {Vector3(0, 0.1f * voxel_size, 0)});
+    auto result = analyzer.Analyze(world, {Vector3(0, voxel_size, 0)});
 
     // Should fail (not grounded)
     EXPECT_TRUE(result.structure_failed);

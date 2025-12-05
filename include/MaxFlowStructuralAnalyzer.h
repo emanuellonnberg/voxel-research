@@ -191,6 +191,7 @@ private:
     float ComputeEdgeCapacity(const FlowNode* from, const FlowNode* to) const;
     bool IsDownwardOrLateralConnection(const FlowNode* from, const FlowNode* to) const;
     std::vector<Vector3> FindNeighborPositions(const Vector3& position) const;
+    float CalculateCumulativeMass(const Vector3& position) const;
 
     // Data
     VoxelWorld* world;

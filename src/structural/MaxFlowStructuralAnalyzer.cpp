@@ -6,6 +6,7 @@
 #include <cmath>
 #include <chrono>
 #include <iostream>
+#include <set>
 
 static constexpr float GRAVITY = 9.81f;  // m/s²
 static constexpr float INF = std::numeric_limits<float>::infinity();
@@ -211,18 +212,28 @@ void MaxFlowStructuralAnalyzer::CreateVoxelNodes(const std::vector<Vector3>& pos
 }
 
 void MaxFlowStructuralAnalyzer::ConnectSourceToVoxels() {
-    // Source → Voxel edges with capacity = mass × g (load that must flow)
+    // Source → Voxel edges with capacity = cumulative mass above + own mass
+    // This allows load to flow from top voxels through bottom voxels to ground
+    // Each voxel must support its own weight plus all weight above it
     for (size_t i = 2; i < nodes.size(); ++i) {  // Skip source(0) and sink(1)
         FlowNode* voxel = nodes[i];
         if (voxel->type != FlowNode::VOXEL) continue;
 
-        float load = voxel->mass * GRAVITY;
+        // Calculate total mass supported by this voxel (own + above)
+        float cumulative_mass = CalculateCumulativeMass(voxel->position);
+        float load = cumulative_mass * GRAVITY;
+
         AddFlowEdge(source_id, voxel->id, load);
     }
 }
 
 void MaxFlowStructuralAnalyzer::ConnectVoxelToVoxel() {
     // Connect voxels to neighbors with capacity = structural strength
+    // To avoid duplicate edges, only add edges where voxel.id < neighbor.id
+    // Then add the reverse direction explicitly
+
+    std::set<std::pair<int, int>> added_edges;
+
     for (size_t i = 2; i < nodes.size(); ++i) {
         FlowNode* voxel = nodes[i];
         if (voxel->type != FlowNode::VOXEL) continue;
@@ -236,10 +247,23 @@ void MaxFlowStructuralAnalyzer::ConnectVoxelToVoxel() {
 
             FlowNode* neighbor = nodes[it->second];
 
-            // Only connect downward or toward ground
+            // Check if we should create edges between these nodes
             if (IsDownwardOrLateralConnection(voxel, neighbor)) {
-                float capacity = ComputeEdgeCapacity(voxel, neighbor);
-                AddFlowEdge(voxel->id, neighbor->id, capacity);
+                // Avoid duplicates - only add edge if not already added
+                int id1 = voxel->id;
+                int id2 = neighbor->id;
+                auto edge_pair = std::make_pair(std::min(id1, id2), std::max(id1, id2));
+
+                if (added_edges.find(edge_pair) == added_edges.end()) {
+                    float capacity = ComputeEdgeCapacity(voxel, neighbor);
+
+                    // Add edges in BOTH directions with capacity
+                    // This creates true bidirectional flow network
+                    AddFlowEdge(voxel->id, neighbor->id, capacity);
+                    AddFlowEdge(neighbor->id, voxel->id, capacity);
+
+                    added_edges.insert(edge_pair);
+                }
             }
         }
     }
@@ -518,19 +542,16 @@ bool MaxFlowStructuralAnalyzer::IsDownwardOrLateralConnection(
     const FlowNode* from,
     const FlowNode* to) const
 {
-    // Allow downward connections (y decreases)
-    if (to->position.y < from->position.y - 0.01f) {
-        return true;
-    }
-
-    // Allow lateral connections if either node is ground-anchored
-    if (std::abs(to->position.y - from->position.y) < 0.01f) {
-        if (IsGroundAnchor(from->position) || IsGroundAnchor(to->position)) {
-            return true;
-        }
-    }
-
-    return false;
+    // Allow all connections - structures distribute loads in all directions
+    // This creates a bidirectional flow network that properly models:
+    // - Compression (downward)
+    // - Tension (upward - reaction forces)
+    // - Shear (lateral)
+    // - Load redistribution through strongest available paths
+    //
+    // Physical justification: Newton's 3rd law - if voxel A pushes on B,
+    // then B pushes back on A with equal force. Both directions needed!
+    return true;
 }
 
 std::vector<Vector3> MaxFlowStructuralAnalyzer::FindNeighborPositions(
@@ -554,4 +575,34 @@ std::vector<Vector3> MaxFlowStructuralAnalyzer::FindNeighborPositions(
     }
 
     return neighbors;
+}
+
+float MaxFlowStructuralAnalyzer::CalculateCumulativeMass(const Vector3& position) const
+{
+    // Calculate total mass this voxel must support (own mass + all mass above)
+    float total_mass = 0.0f;
+    float voxel_size = world->GetVoxelSize();
+
+    // Raycast upward to find all voxels above this position
+    Vector3 current_pos = position;
+
+    while (true) {
+        if (!world->HasVoxel(current_pos)) {
+            break;
+        }
+
+        Voxel voxel = world->GetVoxel(current_pos);
+        if (voxel.material_id == 0) {
+            break;  // Hit air
+        }
+
+        // Add this voxel's mass
+        const Material& mat = g_materials.GetMaterial(voxel.material_id);
+        total_mass += mat.density * 1.0f;  // 1m³ voxel volume
+
+        // Move up one voxel
+        current_pos.y += voxel_size;
+    }
+
+    return total_mass;
 }
