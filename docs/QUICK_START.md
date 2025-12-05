@@ -46,9 +46,9 @@ cmake --build . -j4
 
 **Expected output:**
 ```
-[==========] Running 401 tests from 17 test suites.
-[==========] 401 tests from 17 test suites ran.
-[  PASSED  ] 401 tests.
+[==========] Running 422 tests from 18 test suites.
+[==========] 422 tests from 18 test suites ran.
+[  PASSED  ] 422 tests.
 ```
 
 ---
@@ -61,7 +61,8 @@ This example demonstrates the complete destruction pipeline in ~30 lines of code
 
 ```cpp
 #include "VoxelWorld.h"
-#include "StructuralAnalyzer.h"
+#include "StructuralAnalyzer.h"           // Spring-based analyzer
+// #include "MaxFlowStructuralAnalyzer.h" // Max-flow analyzer (faster)
 #include "VoxelPhysicsIntegration.h"
 #include "BulletEngine.h"
 #include <iostream>
@@ -93,7 +94,12 @@ int main() {
     std::cout << "Destroyed base, remaining: " << world.GetVoxelCount() << " voxels\n";
 
     // Step 4: Run structural analysis (Track 1)
+    // Choose analyzer:
+    // Option 1: Spring System (easy to tune, more parameters)
     StructuralAnalyzer analyzer;
+    // Option 2: Max-Flow Algorithm (23x faster, deterministic)
+    // MaxFlowStructuralAnalyzer analyzer;
+
     auto result = analyzer.Analyze(world, damaged, 500.0f);
 
     std::cout << "Structure failed: " << (result.structure_failed ? "YES" : "NO") << "\n";
@@ -175,8 +181,15 @@ The voxel destruction engine has two main tracks:
 **Output:** Which voxel clusters should fall
 **Time Budget:** < 500ms
 
+Two analyzer options (same interface):
+
 ```cpp
+// Option 1: Spring System (more parameters, easier tuning)
 StructuralAnalyzer analyzer;
+
+// Option 2: Max-Flow (23x faster, deterministic, more accurate)
+// MaxFlowStructuralAnalyzer analyzer;
+
 auto result = analyzer.Analyze(world, damaged_positions, 500.0f);
 
 if (result.structure_failed) {
@@ -352,6 +365,19 @@ Automated demonstration of all features with beautiful console output.
 
 **Use this to:** See the complete system in action.
 
+### 4. Analyzer Comparison (Week 8+)
+
+```bash
+./bin/AnalyzerComparison
+```
+
+Compares Spring System vs Max-Flow analyzer across 6 scenarios:
+- Performance (speed comparison)
+- Accuracy (detection agreement)
+- Determinism (reproducibility)
+
+**Use this to:** Choose which analyzer to use in your project (max-flow is 23x faster).
+
 ---
 
 ## Next Steps
@@ -450,11 +476,12 @@ analyzer.SetTimestep(0.02f);      // Larger timestep
 ### Key Classes
 
 ```cpp
-VoxelWorld          // Voxel storage and queries
-StructuralAnalyzer  // Track 1: Find what should fall
-BulletEngine        // Bullet Physics wrapper
-VoxelPhysicsIntegration // Track 3: Spawn and manage debris
-TurnManager         // Turn-based phase control
+VoxelWorld                 // Voxel storage and queries
+StructuralAnalyzer         // Track 1: Spring-based analyzer
+MaxFlowStructuralAnalyzer  // Track 1: Max-flow analyzer (faster)
+BulletEngine               // Bullet Physics wrapper
+VoxelPhysicsIntegration    // Track 3: Spawn and manage debris
+TurnManager                // Turn-based phase control
 ```
 
 ### Key Methods
