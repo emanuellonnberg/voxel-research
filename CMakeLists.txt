@@ -109,6 +109,7 @@ add_library(VoxelCore
     src/core/Vector3.cpp
     src/core/Material.cpp
     src/core/TurnManager.cpp
+    src/core/JobSystem.cpp  # Week 13 Day 41: Multi-threading
 
     # Voxel system
     src/voxel/VoxelWorld.cpp
@@ -179,6 +180,7 @@ if(BUILD_TESTS)
         tests/test_StructuralAnalyzer.cpp
         tests/test_MaxFlowStructuralAnalyzer.cpp
         tests/test_FEMValidation.cpp
+        tests/test_JobSystem.cpp  # Week 13 Day 41: Multi-threading
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
