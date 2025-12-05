@@ -20,10 +20,13 @@
 
 ## Mode 4: Physics Proxy
 - Implemented baseline: `PhysicsProxySimulator` selects nodes within a configurable radius, spawns them as Bullet rigid bodies, runs a short burst simulation, and feeds failed node IDs back into `StructuralAnalyzer`. AnalysisResult now records proxy telemetry and the analyzer automatically falls back to heuristics when the proxy cannot run (e.g., Bullet disabled).
-- Next steps: enrich the proxy with smarter selection heuristics (include support chains automatically), capture impulses/constraint forces in addition to drop/velocity thresholds, and explore caching pools so repeated bursts amortize allocation cost.
+- ✅ Smarter selection heuristics now prioritize overloaded nodes, quantize picks onto a coarse grid, and stitch in their ground-support chains so proxy bursts cover full load paths. The new knobs (`proxy_selection_grid_size`, `proxy_borderline_load_ratio`, weight sliders, and `proxy_support_chain_depth`) are persisted through INI/config and regression-tested in `PhysicsProxySelectionTest`.
+- ✅ Telemetry upgrade: every proxy rigid body now reports peak drop, peak linear speed, and the largest contact impulse observed during the Bullet burst (plus optional impulse history samples gated by `proxy_record_impulse_history`). These metrics let designers inspect borderline collapses and tune material thresholds precisely.
+- ✅ Body pooling: reusable Bullet rigid bodies and shape caches drastically reduce proxy build cost. Result stats (`bodies_created`, `bodies_reused`) confirm cache hits in regression tests (`PhysicsProxyBodyReuseStats`).
+- Remaining next steps: capture full impulse/constraint histories if needed and explore caching pools so repeated bursts amortize allocation cost.
 
 Implementation outline for the next iteration:
-  1. **Proxy Selection:** When heuristics/redistribution flag borderline clusters, collect voxels within a configurable radius, quantize to a coarse grid, and cap the total voxel count (e.g. 1–2 K) to keep proxy creation deterministic.
+  1. **Proxy Selection (DONE):** When heuristics/redistribution flag borderline clusters, collect voxels within a configurable radius, quantize to a coarse grid, and cap the total voxel count (e.g. 1–2 K) to keep proxy creation deterministic. Overloaded nodes bypass the radius gate and seed support-chain expansion.
   2. **Proxy Build:** Reuse `VoxelPhysicsIntegration` helpers to create a temporary `VoxelWorld`/`VoxelCluster`, then feed that into a stripped-down Bullet scene (no fancy materials, just box shapes + gravity). Map each proxy rigid body back to the originating `SpringNode`.
   3. **Burst Simulation:** Step the proxy for N substeps (e.g. 0.25–0.5 s of sim time) with high damping. Track contact impulses, constraint forces, and peak accelerations.
   4. **Failure Mapping:** Convert high-impulse events back into load multipliers per node. If a proxy body exceeds its material’s allowable stress or moves farther than the structural solver predicted, mark it as failed in the main analyzer.

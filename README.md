@@ -172,6 +172,9 @@ voxel-research/
   - **Configurable selection radius, body count, simulation time, timestep, and failure thresholds (INI-driven)**
   - **StructuralAnalyzer reports proxy telemetry via `AnalysisResult` and marks returned node IDs as failed clusters**
   - **Automatic heuristic fallback when Bullet is unavailable plus regression tests for proxy selection**
+  - **NEW:** Smarter proxy selection prioritizes overloaded nodes, quantizes picks to a grid, and extends along support chains via new INI knobs (`proxy_selection_grid_size`, load-ratio weights, and `proxy_support_chain_depth`). Dedicated `PhysicsProxySelectionTest` cases lock the behavior down.
+  - **NEW:** Proxy result telemetry now captures per-node peak drop, speed, and contact impulses so gameplay or tooling can inspect exactly how each voxel behaved during the Bullet burst.
+  - **NEW:** Added a reusable Bullet body pool for proxy voxels—burst builds recycle rigid bodies and expose `bodies_created` / `bodies_reused` stats so we can verify caching wins in tests. Optional impulse-history logging (`proxy_record_impulse_history`) lets designers inspect per-contact samples when needed.
 - ✅ **Week 5 Day 25: Material-Specific Fracture Behaviors**
   - **VoxelFragmentation system for realistic breakage patterns:**
     - **Wood: Splits into 3-6 elongated splinters (along grain)**

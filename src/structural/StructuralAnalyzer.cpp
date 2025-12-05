@@ -1037,6 +1037,13 @@ bool StructuralAnalyzer::SaveParameters(const std::string& filename) const {
     file << "proxy_time_step=" << params.proxy_settings.time_step << "\n";
     file << "proxy_drop_threshold=" << params.proxy_settings.drop_threshold << "\n";
     file << "proxy_velocity_threshold=" << params.proxy_settings.velocity_threshold << "\n";
+    file << "proxy_selection_grid_size=" << params.proxy_settings.selection_grid_size << "\n";
+    file << "proxy_borderline_load_ratio=" << params.proxy_settings.borderline_load_ratio << "\n";
+    file << "proxy_overload_priority_weight=" << params.proxy_settings.overload_priority_weight << "\n";
+    file << "proxy_support_priority_weight=" << params.proxy_settings.support_priority_weight << "\n";
+    file << "proxy_support_chain_depth=" << params.proxy_settings.support_chain_depth << "\n";
+    file << "proxy_record_impulse_history=" << (params.proxy_settings.record_impulse_history ? 1 : 0) << "\n";
+    file << "proxy_max_impulse_samples=" << params.proxy_settings.max_impulse_samples << "\n";
 
     file.close();
     std::cout << "[StructuralAnalyzer] Parameters saved to: " << filename << "\n";
@@ -1126,6 +1133,20 @@ bool StructuralAnalyzer::LoadParameters(const std::string& filename) {
                 params.proxy_settings.drop_threshold = std::stof(value);
             } else if (key == "proxy_velocity_threshold") {
                 params.proxy_settings.velocity_threshold = std::stof(value);
+            } else if (key == "proxy_selection_grid_size") {
+                params.proxy_settings.selection_grid_size = std::stof(value);
+            } else if (key == "proxy_borderline_load_ratio") {
+                params.proxy_settings.borderline_load_ratio = std::stof(value);
+            } else if (key == "proxy_overload_priority_weight") {
+                params.proxy_settings.overload_priority_weight = std::stof(value);
+            } else if (key == "proxy_support_priority_weight") {
+                params.proxy_settings.support_priority_weight = std::stof(value);
+            } else if (key == "proxy_support_chain_depth") {
+                params.proxy_settings.support_chain_depth = std::stoi(value);
+            } else if (key == "proxy_record_impulse_history") {
+                params.proxy_settings.record_impulse_history = (std::stoi(value) != 0);
+            } else if (key == "proxy_max_impulse_samples") {
+                params.proxy_settings.max_impulse_samples = std::stoi(value);
             } else {
                 std::cerr << "[StructuralAnalyzer] Unknown parameter: " << key << "\n";
             }
@@ -1294,6 +1315,58 @@ bool StructuralAnalyzer::ValidateParameters() {
 
     if (params.proxy_settings.time_step > params.proxy_settings.simulation_time) {
         params.proxy_settings.time_step = params.proxy_settings.simulation_time * 0.25f;
+        params_valid = false;
+    }
+
+    if (params.proxy_settings.selection_grid_size <= 0.0f) {
+        std::cerr << "[StructuralAnalyzer] proxy_selection_grid_size invalid ("
+                  << params.proxy_settings.selection_grid_size << "), clamping to 0.05\n";
+        params.proxy_settings.selection_grid_size = 0.05f;
+        params_valid = false;
+    }
+
+    if (params.proxy_settings.borderline_load_ratio < 0.0f) {
+        std::cerr << "[StructuralAnalyzer] proxy_borderline_load_ratio cannot be negative\n";
+        params.proxy_settings.borderline_load_ratio = 0.0f;
+        params_valid = false;
+    } else if (params.proxy_settings.borderline_load_ratio > 10.0f) {
+        std::cerr << "[StructuralAnalyzer] proxy_borderline_load_ratio too large ("
+                  << params.proxy_settings.borderline_load_ratio << "), clamping to 10\n";
+        params.proxy_settings.borderline_load_ratio = 10.0f;
+        params_valid = false;
+    }
+
+    if (params.proxy_settings.overload_priority_weight < 0.0f) {
+        std::cerr << "[StructuralAnalyzer] proxy_overload_priority_weight cannot be negative\n";
+        params.proxy_settings.overload_priority_weight = 0.0f;
+        params_valid = false;
+    }
+
+    if (params.proxy_settings.support_priority_weight < 0.0f) {
+        std::cerr << "[StructuralAnalyzer] proxy_support_priority_weight cannot be negative\n";
+        params.proxy_settings.support_priority_weight = 0.0f;
+        params_valid = false;
+    }
+
+    if (params.proxy_settings.support_chain_depth < 0) {
+        std::cerr << "[StructuralAnalyzer] proxy_support_chain_depth cannot be negative\n";
+        params.proxy_settings.support_chain_depth = 0;
+        params_valid = false;
+    } else if (params.proxy_settings.support_chain_depth > 16) {
+        std::cerr << "[StructuralAnalyzer] proxy_support_chain_depth too large ("
+                  << params.proxy_settings.support_chain_depth << "), clamping to 16\n";
+        params.proxy_settings.support_chain_depth = 16;
+        params_valid = false;
+    }
+
+    if (params.proxy_settings.max_impulse_samples < 0) {
+        std::cerr << "[StructuralAnalyzer] proxy_max_impulse_samples cannot be negative\n";
+        params.proxy_settings.max_impulse_samples = 0;
+        params_valid = false;
+    } else if (params.proxy_settings.max_impulse_samples > 64) {
+        std::cerr << "[StructuralAnalyzer] proxy_max_impulse_samples too large ("
+                  << params.proxy_settings.max_impulse_samples << "), clamping to 64\n";
+        params.proxy_settings.max_impulse_samples = 64;
         params_valid = false;
     }
 
