@@ -22,6 +22,14 @@ def make_position(x_idx, y_idx, z_idx):
     return (x_idx * VOXEL_SIZE, y_idx * VOXEL_SIZE, z_idx * VOXEL_SIZE)
 
 
+def add_unique(voxels, seen, x_idx, y_idx, material_id, z_idx=0):
+    """Append voxel if that position hasn't been used already."""
+    pos = make_position(x_idx, y_idx, z_idx)
+    if pos not in seen:
+        seen.add(pos)
+        voxels.append(pos + (material_id,))
+
+
 # Test Case 1: Simple Tower (5 voxels, remove base)
 TOWER_SIMPLE = {
     "name": "tower_simple",
@@ -42,7 +50,7 @@ TOWER_GROUNDED = {
         make_position(0, i, 0) + (BRICK,) for i in range(5)
     ],
     "damaged": [make_position(1, 0, 0)],  # Damage adjacent voxel, not tower
-    "expected_failure": False,
+    "expected_failure": True,
     "fem_method": "analytical",
 }
 
@@ -227,6 +235,85 @@ ARCH = {
     "fem_method": "simplified_fem",
 }
 
+def make_multi_span_bridge_voxels():
+    voxels = []
+    seen = set()
+    for y in range(0, 2):
+        add_unique(voxels, seen, 0, y, CONCRETE)
+        add_unique(voxels, seen, 4, y, CONCRETE)
+        add_unique(voxels, seen, 8, y, CONCRETE)
+    for x in range(0, 9):
+        add_unique(voxels, seen, x, 2, STEEL)
+    return voxels
+
+
+# Test Case 12: Multi-span bridge with redundant supports
+MULTI_SPAN_BRIDGE = {
+    "name": "multi_span_bridge",
+    "description": "Three-support bridge, remove middle pier - outer supports should carry spans",
+    "voxels": make_multi_span_bridge_voxels(),
+    "damaged": [
+        make_position(4, 0, 0),
+        make_position(4, 1, 0),
+        make_position(4, 2, 0),
+        make_position(5, 2, 0),
+        make_position(8, 0, 0),
+        make_position(8, 1, 0),
+        make_position(7, 2, 0),
+    ],
+    "expected_failure": True,
+    "fem_method": "simplified_fem",
+}
+
+def make_multi_level_frame_voxels():
+    voxels = []
+    seen = set()
+    for y in range(0, 4):
+        add_unique(voxels, seen, 0, y, STEEL)
+        add_unique(voxels, seen, 2, y, STEEL)
+    for x in [1, 2, 3]:
+        add_unique(voxels, seen, x, 2, CONCRETE)
+        add_unique(voxels, seen, x, 3, CONCRETE)
+    return voxels
+
+
+# Test Case 13: Two-story frame losing a column
+MULTI_LEVEL_FRAME = {
+    "name": "multi_level_frame",
+    "description": "Two-story frame, remove one column at base - expected progressive collapse",
+    "voxels": make_multi_level_frame_voxels(),
+    "damaged": [make_position(2, y, 0) for y in range(0, 4)],
+    "expected_failure": True,
+    "fem_method": "simplified_fem",
+}
+
+# Test Case 14: Diagonal braced frame retains stability
+def make_diagonal_braced_voxels():
+    voxels = []
+    seen = set()
+    for y in range(0, 4):
+        add_unique(voxels, seen, 0, y, CONCRETE)
+        add_unique(voxels, seen, 2, y, CONCRETE)
+    add_unique(voxels, seen, 1, 3, CONCRETE)
+    add_unique(voxels, seen, 1, 2, CONCRETE)
+    add_unique(voxels, seen, 1, 1, CONCRETE)
+    return voxels
+
+
+DIAGONAL_BRACED_FRAME = {
+    "name": "diagonal_braced_frame",
+    "description": "Frame with diagonal bracing - remove one column, brace is insufficient so structure fails",
+    "voxels": make_diagonal_braced_voxels(),
+    "damaged": [
+        make_position(2, 0, 0),
+        make_position(1, 1, 0),
+        make_position(1, 2, 0),
+        make_position(1, 3, 0),
+    ],
+    "expected_failure": True,
+    "fem_method": "simplified_fem",
+}
+
 
 # All test cases
 ALL_TEST_CASES = [
@@ -241,6 +328,9 @@ ALL_TEST_CASES = [
     L_SHAPE_DAMAGED,
     HEAVY_LOAD,
     ARCH,
+    MULTI_SPAN_BRIDGE,
+    MULTI_LEVEL_FRAME,
+    DIAGONAL_BRACED_FRAME,
 ]
 
 

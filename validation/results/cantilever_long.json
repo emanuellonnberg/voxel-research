@@ -6,7 +6,7 @@
   "max_stress": 1006506.0000000001,
   "failure_stress": 2000000.0,
   "cantilever_length": 0.9500000000000001,
-  "method_description": "Beam bending: \u03c3=1.0 MPa vs 2.0 MPa limit",
+  "method_description": "Beam bending: s=1.0 MPa vs 2.0 MPa limit",
   "voxel_count": 20,
   "damaged_count": 0,
   "expected_failure": true

@@ -306,6 +306,33 @@ TEST_F(MaxFlowStructuralAnalyzerTest, CompareWithSpringAnalyzer) {
     EXPECT_LT(maxflow_result.calculation_time_ms, spring_result.calculation_time_ms);
 }
 
+TEST_F(MaxFlowStructuralAnalyzerTest, CompareWithBaselineSpringAnalyzerNoAdvancedModes) {
+    // Same comparison as above but explicitly disable spring-only advanced modes
+    float voxel_size = world.GetVoxelSize();
+
+    // Build a taller tower so redistribution/stack heuristics would normally kick in
+    for (int y = 1; y < 10; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+
+    auto maxflow_result = analyzer.Analyze(world, damaged);
+
+    StructuralAnalyzer baseline_spring;
+    baseline_spring.params.analysis_mode = StructuralAnalyzer::StructuralMode::HeuristicSupport;
+    baseline_spring.params.allow_ground_absorption = false;
+    baseline_spring.params.load_capacity_scale = 1.0f;
+    baseline_spring.params.load_redistribution_iterations = 1;
+    baseline_spring.params.load_redistribution_tolerance = 1e-3f;
+
+    auto spring_result = baseline_spring.Analyze(world, damaged);
+
+    EXPECT_EQ(maxflow_result.structure_failed, spring_result.structure_failed);
+    EXPECT_FALSE(spring_result.proxy_mode_used);
+    EXPECT_FALSE(spring_result.load_stats.enabled);  // verifies advanced modes stayed off
+}
+
 // ===== Parameter Tests =====
 
 TEST_F(MaxFlowStructuralAnalyzerTest, InfluenceRadiusWorks) {

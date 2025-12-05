@@ -163,6 +163,96 @@ protected:
             {Vector3(0, 2*s, 0)}  // Remove corner
         };
     }
+
+    TestStructure GetMultiSpanBridge() {
+        float s = 0.05f;
+        TestStructure structure;
+        structure.name = "multi_span_bridge";
+
+        auto add_voxel = [&structure](const Vector3& pos, uint8_t mat) {
+            structure.voxels.push_back({pos, mat});
+        };
+
+        // Supports at x=0, 4, 8 (two voxels tall)
+        for (float y = 0; y <= s; y += s) {
+        add_voxel(Vector3(0.0f, y, 0.0f), MaterialDatabase::CONCRETE);
+        add_voxel(Vector3(4 * s, y, 0.0f), MaterialDatabase::CONCRETE);
+        add_voxel(Vector3(8 * s, y, 0.0f), MaterialDatabase::CONCRETE);
+    }
+
+    // Deck at y = 2s
+    for (int x = 0; x <= 8; ++x) {
+        add_voxel(Vector3(x * s, 2 * s, 0.0f), MaterialDatabase::STEEL);
+    }
+
+    structure.damaged = {
+        Vector3(4 * s, 0.0f, 0.0f),
+        Vector3(4 * s, s, 0.0f),
+        Vector3(4 * s, 2 * s, 0.0f),
+        Vector3(5 * s, 2 * s, 0.0f),
+        Vector3(8 * s, 0.0f, 0.0f),
+        Vector3(8 * s, s, 0.0f),
+        Vector3(7 * s, 2 * s, 0.0f),
+    };
+    return structure;
+}
+
+    TestStructure GetMultiLevelFrame() {
+        float s = 0.05f;
+        TestStructure structure;
+        structure.name = "multi_level_frame";
+
+        auto add_voxel = [&structure](const Vector3& pos, uint8_t mat) {
+            structure.voxels.push_back({pos, mat});
+        };
+
+        // Columns at x = 0 and x = 2s (four voxels tall)
+        for (int y = 0; y < 4; ++y) {
+            add_voxel(Vector3(0.0f, y * s, 0.0f), MaterialDatabase::STEEL);
+            add_voxel(Vector3(2 * s, y * s, 0.0f), MaterialDatabase::STEEL);
+        }
+
+        // Floor beams at y = 2s and y = 3s
+        for (int x : {1, 2, 3}) {
+            add_voxel(Vector3(x * s, 2 * s, 0.0f), MaterialDatabase::CONCRETE);
+            add_voxel(Vector3(x * s, 3 * s, 0.0f), MaterialDatabase::CONCRETE);
+        }
+
+        structure.damaged = {
+            Vector3(2 * s, 0.0f, 0.0f),
+            Vector3(2 * s, 1 * s, 0.0f),
+            Vector3(2 * s, 2 * s, 0.0f),
+            Vector3(2 * s, 3 * s, 0.0f),
+        };
+        return structure;
+    }
+
+    TestStructure GetDiagonalBracedFrame() {
+        float s = 0.05f;
+        TestStructure structure;
+        structure.name = "diagonal_braced_frame";
+
+        auto add_voxel = [&structure](const Vector3& pos, uint8_t mat) {
+            structure.voxels.push_back({pos, mat});
+        };
+
+        for (int y = 0; y < 4; ++y) {
+            add_voxel(Vector3(0.0f, y * s, 0.0f), MaterialDatabase::CONCRETE);
+            add_voxel(Vector3(2 * s, y * s, 0.0f), MaterialDatabase::CONCRETE);
+        }
+
+        add_voxel(Vector3(1 * s, 3 * s, 0.0f), MaterialDatabase::CONCRETE);
+        add_voxel(Vector3(1 * s, 2 * s, 0.0f), MaterialDatabase::CONCRETE);
+        add_voxel(Vector3(1 * s, 1 * s, 0.0f), MaterialDatabase::CONCRETE);
+
+        structure.damaged = {
+            Vector3(2 * s, 0.0f, 0.0f),
+            Vector3(1 * s, 1 * s, 0.0f),
+            Vector3(1 * s, 2 * s, 0.0f),
+            Vector3(1 * s, 3 * s, 0.0f),
+        };
+        return structure;
+    }
 };
 
 // Test: Tower Simple
@@ -270,6 +360,78 @@ TEST_F(FEMValidationTest, LShapeDamaged) {
     auto maxflow_result = maxflow.Analyze(world, structure.damaged);
 
     std::cout << "\nL-Shape Damaged:\n";
+    std::cout << "  FEM: " << (ground_truth.should_fail ? "FAIL" : "OK") << "\n";
+    std::cout << "  Spring: " << (spring_result.structure_failed ? "FAIL" : "OK")
+              << (spring_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";
+    std::cout << "  Max-Flow: " << (maxflow_result.structure_failed ? "FAIL" : "OK")
+              << (maxflow_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";
+
+    EXPECT_EQ(spring_result.structure_failed, ground_truth.should_fail);
+    EXPECT_EQ(maxflow_result.structure_failed, ground_truth.should_fail);
+}
+
+TEST_F(FEMValidationTest, MultiSpanBridgeDamaged) {
+    auto ground_truth = LoadGroundTruth("multi_span_bridge.json");
+    auto structure = GetMultiSpanBridge();
+
+    VoxelWorld world;
+    BuildStructure(world, structure);
+
+    StructuralAnalyzer spring;
+    auto spring_result = spring.Analyze(world, structure.damaged);
+
+    MaxFlowStructuralAnalyzer maxflow;
+    auto maxflow_result = maxflow.Analyze(world, structure.damaged);
+
+    std::cout << "\nMulti-Span Bridge (Center Support Removed):\n";
+    std::cout << "  FEM: " << (ground_truth.should_fail ? "FAIL" : "OK") << "\n";
+    std::cout << "  Spring: " << (spring_result.structure_failed ? "FAIL" : "OK")
+              << (spring_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";
+    std::cout << "  Max-Flow: " << (maxflow_result.structure_failed ? "FAIL" : "OK")
+              << (maxflow_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";
+
+    EXPECT_EQ(spring_result.structure_failed, ground_truth.should_fail);
+    EXPECT_EQ(maxflow_result.structure_failed, ground_truth.should_fail);
+}
+
+TEST_F(FEMValidationTest, MultiLevelFrameColumnRemoved) {
+    auto ground_truth = LoadGroundTruth("multi_level_frame.json");
+    auto structure = GetMultiLevelFrame();
+
+    VoxelWorld world;
+    BuildStructure(world, structure);
+
+    StructuralAnalyzer spring;
+    auto spring_result = spring.Analyze(world, structure.damaged);
+
+    MaxFlowStructuralAnalyzer maxflow;
+    auto maxflow_result = maxflow.Analyze(world, structure.damaged);
+
+    std::cout << "\nMulti-Level Frame (Column Removed):\n";
+    std::cout << "  FEM: " << (ground_truth.should_fail ? "FAIL" : "OK") << "\n";
+    std::cout << "  Spring: " << (spring_result.structure_failed ? "FAIL" : "OK")
+              << (spring_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";
+    std::cout << "  Max-Flow: " << (maxflow_result.structure_failed ? "FAIL" : "OK")
+              << (maxflow_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";
+
+    EXPECT_EQ(spring_result.structure_failed, ground_truth.should_fail);
+    EXPECT_EQ(maxflow_result.structure_failed, ground_truth.should_fail);
+}
+
+TEST_F(FEMValidationTest, DiagonalBracedFrame) {
+    auto ground_truth = LoadGroundTruth("diagonal_braced_frame.json");
+    auto structure = GetDiagonalBracedFrame();
+
+    VoxelWorld world;
+    BuildStructure(world, structure);
+
+    StructuralAnalyzer spring;
+    auto spring_result = spring.Analyze(world, structure.damaged);
+
+    MaxFlowStructuralAnalyzer maxflow;
+    auto maxflow_result = maxflow.Analyze(world, structure.damaged);
+
+    std::cout << "\nDiagonal-Braced Frame:\n";
     std::cout << "  FEM: " << (ground_truth.should_fail ? "FAIL" : "OK") << "\n";
     std::cout << "  Spring: " << (spring_result.structure_failed ? "FAIL" : "OK")
               << (spring_result.structure_failed == ground_truth.should_fail ? " ✓" : " ✗") << "\n";

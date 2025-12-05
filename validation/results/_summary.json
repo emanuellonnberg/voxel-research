@@ -9,9 +9,9 @@
   },
   {
     "name": "tower_grounded",
-    "expected": false,
+    "expected": true,
     "actual": false,
-    "match": true,
+    "match": false,
     "method": "analytical_connectivity",
     "failed_voxels": 0
   },
@@ -66,10 +66,10 @@
   {
     "name": "l_shape_damaged",
     "expected": true,
-    "actual": false,
-    "match": false,
-    "method": "simplified_fem_hybrid",
-    "failed_voxels": 0
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 3
   },
   {
     "name": "heavy_load",
@@ -82,9 +82,33 @@
   {
     "name": "arch",
     "expected": false,
-    "actual": false,
+    "actual": true,
+    "match": false,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 3
+  },
+  {
+    "name": "multi_span_bridge",
+    "expected": true,
+    "actual": true,
     "match": true,
-    "method": "simplified_fem_hybrid",
-    "failed_voxels": 0
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 2
+  },
+  {
+    "name": "multi_level_frame",
+    "expected": true,
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 2
+  },
+  {
+    "name": "diagonal_braced_frame",
+    "expected": true,
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 3
   }
 ]
