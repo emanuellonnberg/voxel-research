@@ -117,13 +117,15 @@ add_library(VoxelCore
     src/voxel/VoxelCluster.cpp
     src/voxel/VoxelStability.cpp
 
-    # Rendering (Week 1 Day 3, Week 5 Day 28)
+    # Rendering (Week 1 Day 3, Week 5 Day 28, Week 7 Day 32)
     src/rendering/Camera.cpp
     src/rendering/Renderer.cpp
     src/rendering/ParticleSystem.cpp
+    src/rendering/VisualFeedback.cpp
 
-    # Structural analysis (Week 3-4)
+    # Structural analysis (Week 3-4, Week 8+: Max-Flow variant)
     src/structural/StructuralAnalyzer.cpp
+    src/structural/MaxFlowStructuralAnalyzer.cpp
     src/structural/ParameterTuning.cpp
     src/structural/VoxelFragmentation.cpp
 
@@ -141,10 +143,10 @@ target_include_directories(VoxelCore PUBLIC
     $<$<BOOL:${USE_BULLET}>:${CMAKE_SOURCE_DIR}/third_party/bullet3/src>
 )
 
-# Link libraries
+# Link Bullet libraries if enabled
 if(USE_BULLET)
     target_link_libraries(VoxelCore PUBLIC ${BULLET_LIBRARIES})
-    set_source_files_properties(src/physics/PhysicsProxySimulator.cpp PROPERTIES COMPILE_DEFINITIONS USE_BULLET)
+    target_compile_definitions(VoxelCore PUBLIC USE_BULLET)
 endif()
 
 # Link OpenGL libraries if rendering is enabled
@@ -176,6 +178,8 @@ if(BUILD_TESTS)
         tests/test_VoxelCluster.cpp
         tests/test_VoxelStability.cpp
         tests/test_StructuralAnalyzer.cpp
+        tests/test_MaxFlowStructuralAnalyzer.cpp
+        tests/test_FEMValidation.cpp
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
@@ -183,6 +187,7 @@ if(BUILD_TESTS)
         tests/test_RubbleSystem.cpp
         tests/test_ParticleSystem.cpp
         tests/test_turn_manager.cpp
+        tests/test_visual_feedback.cpp
     )
 
     target_link_libraries(VoxelTests
@@ -199,7 +204,7 @@ if(BUILD_TESTS)
     gtest_discover_tests(VoxelTests)
 endif()
 
-# Examples (Day 20: Benchmark suite)
+# Examples (Day 20: Benchmark suite, Week 7 Day 34: Performance Profiling)
 if(BUILD_EXAMPLES)
     add_executable(BenchmarkStructuralAnalysis
         examples/benchmark_structural_analysis.cpp
@@ -218,10 +223,38 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(FullDestructionDemo VoxelCore)
 
-    # Define USE_BULLET for demos if enabled
+    # Week 7 Day 34: Performance profiling with large-scale verification
+    add_executable(PerformanceProfiling
+        examples/performance_profiling.cpp
+    )
+    target_link_libraries(PerformanceProfiling VoxelCore)
+
+    # Week 7 Day 33: Test scenarios with validation
+    add_executable(ScenarioTests
+        examples/scenario_tests.cpp
+    )
+    target_link_libraries(ScenarioTests VoxelCore)
+
+    # Week 8 Day 35: Showcase demo
+    add_executable(ShowcaseDemo
+        examples/showcase_demo.cpp
+    )
+    target_link_libraries(ShowcaseDemo VoxelCore)
+
+    # Week 8+: Analyzer comparison (Spring vs Max-Flow)
+    add_executable(AnalyzerComparison
+        examples/analyzer_comparison.cpp
+    )
+    target_link_libraries(AnalyzerComparison VoxelCore)
+
+    # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
         target_compile_definitions(FullDestructionDemo PRIVATE USE_BULLET)
+        target_compile_definitions(PerformanceProfiling PRIVATE USE_BULLET)
+        target_compile_definitions(ScenarioTests PRIVATE USE_BULLET)
+        target_compile_definitions(ShowcaseDemo PRIVATE USE_BULLET)
+        target_compile_definitions(AnalyzerComparison PRIVATE USE_BULLET)
     endif()
 endif()
 

@@ -2,10 +2,11 @@
 #include <iostream>
 #include <algorithm>
 
+// Week 5 Day 28: Bullet Physics includes for impact detection
 #ifdef USE_BULLET
-#include <btBulletDynamicsCommon.h>
-#include "ImpactDetector.h"
 #include "BulletEngine.h"
+#include "ImpactDetector.h"
+#include <btBulletDynamicsCommon.h>
 #endif
 
 VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWorld* world)

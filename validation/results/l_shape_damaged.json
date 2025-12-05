@@ -1,0 +1,10 @@
+{
+  "structure_name": "l_shape_damaged",
+  "fem_solver": "simplified_fem_hybrid",
+  "should_fail": false,
+  "failed_voxels": [],
+  "method_description": "Connectivity + compression stress estimation",
+  "voxel_count": 6,
+  "damaged_count": 1,
+  "expected_failure": true
+}

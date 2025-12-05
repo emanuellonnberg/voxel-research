@@ -94,5 +94,6 @@ public:
     const char* GetEngineVersion() const override;
 
     // Bullet-only accessors
-    btDiscreteDynamicsWorld* GetDynamicsWorld() const { return dynamics_world; }
+    btDiscreteDynamicsWorld* GetDynamicsWorld() { return dynamics_world; }
+    const btDiscreteDynamicsWorld* GetDynamicsWorld() const { return dynamics_world; }
 };
