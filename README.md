@@ -251,7 +251,6 @@ auto result = analyzer.Analyze(world, damaged_positions);  // Same interface!
 ```
 - ✅ **23x faster** - Single-pass algorithm, no iterations
 - ✅ **Deterministic** - Perfectly reproducible results
-- ✅ **More accurate** - 95% match to FEM vs 85% for springs
 - ✅ **No tuning** - Just works out of the box
 - ⚠️ **Fewer parameters** - Less designer flexibility
 
