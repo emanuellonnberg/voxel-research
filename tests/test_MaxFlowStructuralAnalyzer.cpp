@@ -4,7 +4,9 @@
 #include "VoxelWorld.h"
 #include "VoxelUtils.h"
 #include "Material.h"
+#include "JobSystem.h"  // Week 13 Day 42: Parallel testing
 #include <iostream>
+#include <chrono>
 
 class MaxFlowStructuralAnalyzerTest : public ::testing::Test {
 protected:
@@ -259,6 +261,69 @@ TEST_F(MaxFlowStructuralAnalyzerTest, PerformanceUnder500ms) {
 
     std::cout << "Large structure analysis time: " << result.calculation_time_ms << "ms\n";
     EXPECT_LT(result.calculation_time_ms, 500.0f);
+}
+
+// Week 13 Day 42: Parallel Performance Test
+TEST_F(MaxFlowStructuralAnalyzerTest, ParallelSpeedupTest) {
+    // Initialize global job system for this test
+    JobSystem job_system;
+    job_system.Initialize();
+    g_JobSystem = &job_system;
+
+    float voxel_size = world.GetVoxelSize();
+
+    // Create large structure (15x15x15 = 3375 voxels)
+    for (int x = 0; x < 15; x++) {
+        for (int y = 0; y < 15; y++) {
+            for (int z = 0; z < 15; z++) {
+                world.SetVoxel(Vector3(x * voxel_size, y * voxel_size, z * voxel_size),
+                              Voxel(brick_id));
+            }
+        }
+    }
+
+    // Remove voxels to trigger analysis
+    std::vector<Vector3> damaged;
+    for (int i = 0; i < 10; i++) {
+        Vector3 pos(i * voxel_size, 0, 0);
+        world.RemoveVoxel(pos);
+        damaged.push_back(pos);
+    }
+
+    // Run with parallel DISABLED
+    MaxFlowStructuralAnalyzer serial_analyzer;
+    serial_analyzer.params.use_parallel_construction = false;
+    auto start_serial = std::chrono::high_resolution_clock::now();
+    auto serial_result = serial_analyzer.Analyze(world, damaged);
+    auto end_serial = std::chrono::high_resolution_clock::now();
+    float serial_time = std::chrono::duration<float, std::milli>(end_serial - start_serial).count();
+
+    // Run with parallel ENABLED
+    MaxFlowStructuralAnalyzer parallel_analyzer;
+    parallel_analyzer.params.use_parallel_construction = true;
+    auto start_parallel = std::chrono::high_resolution_clock::now();
+    auto parallel_result = parallel_analyzer.Analyze(world, damaged);
+    auto end_parallel = std::chrono::high_resolution_clock::now();
+    float parallel_time = std::chrono::duration<float, std::milli>(end_parallel - start_parallel).count();
+
+    float speedup = serial_time / parallel_time;
+
+    std::cout << "\nParallel Structural Analysis Performance (15x15x15 structure):\n";
+    std::cout << "  Serial:   " << serial_time << "ms\n";
+    std::cout << "  Parallel: " << parallel_time << "ms\n";
+    std::cout << "  Speedup:  " << speedup << "x\n";
+    std::cout << "  Nodes analyzed: " << serial_result.nodes_analyzed << "\n";
+
+    // Expect at least 1.5x speedup (conservative, target is 2-3x)
+    EXPECT_GT(speedup, 1.5f);
+
+    // Verify both methods give same result
+    EXPECT_EQ(serial_result.structure_failed, parallel_result.structure_failed);
+    EXPECT_EQ(serial_result.num_failed_nodes, parallel_result.num_failed_nodes);
+
+    // Cleanup
+    job_system.Shutdown();
+    g_JobSystem = nullptr;
 }
 
 TEST_F(MaxFlowStructuralAnalyzerTest, ConvergesQuickly) {
