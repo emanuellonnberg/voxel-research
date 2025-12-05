@@ -1,6 +1,8 @@
 #include "VoxelPhysicsIntegration.h"
+#include "JobSystem.h"  // Week 13 Day 43: Parallel debris spawning
 #include <iostream>
 #include <algorithm>
+#include <mutex>  // Week 13 Day 43: Thread safety for debris spawning
 
 // Week 5 Day 28: Bullet Physics includes for impact detection
 #ifdef USE_BULLET
@@ -43,89 +45,137 @@ VoxelPhysicsIntegration::~VoxelPhysicsIntegration() {
 int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& clusters) {
     int spawned_count = 0;
 
+    // Week 13 Day 43: Determine if we should use parallel processing
+    const bool use_parallel = g_JobSystem &&
+                              g_JobSystem->IsRunning() &&
+                              clusters.size() > 4;  // Only parallelize if enough clusters
+
+    if (!use_parallel) {
+        // Serial path: Original implementation
+        return SpawnDebrisSerial(clusters);
+    }
+
+    // Week 13 Day 43: Parallel path
+    // Strategy: Prepare all debris data in parallel, then create bodies sequentially
+
+    // Step 1: Collect clusters that need spawning
+    std::vector<const VoxelCluster*> clusters_to_spawn;
     for (const auto& cluster : clusters) {
-        // Skip if already spawned
-        if (IsClusterSpawned(cluster.cluster_id)) {
-            continue;
+        if (!IsClusterSpawned(cluster.cluster_id) && !cluster.voxel_positions.empty()) {
+            clusters_to_spawn.push_back(&cluster);
         }
+    }
 
-        // Skip empty clusters
-        if (cluster.voxel_positions.empty()) {
-            continue;
-        }
+    if (clusters_to_spawn.empty()) {
+        return 0;
+    }
 
-        // Week 5 Day 25: Fragment cluster based on material (if enabled)
+    // Step 2: Prepare debris data in parallel
+    struct PreparedDebris {
+        VoxelCluster fragment;
+        Vector3 center_of_mass;
+        float mass;
+        CollisionShapeHandle shape;
+        uint8_t material_id;
+        uint32_t original_cluster_id;
+        bool valid;
+
+        PreparedDebris() : shape(nullptr), material_id(0), original_cluster_id(0), valid(false) {}
+    };
+
+    std::vector<std::vector<PreparedDebris>> prepared_per_cluster(clusters_to_spawn.size());
+    std::mutex error_mutex;  // For error reporting
+
+    // Parallelize fragmentation and shape creation
+    g_JobSystem->ParallelFor(static_cast<int>(clusters_to_spawn.size()), [&](int idx) {
+        const VoxelCluster& cluster = *clusters_to_spawn[idx];
+        std::vector<PreparedDebris>& prepared = prepared_per_cluster[idx];
+
+        // Fragment cluster based on material (if enabled)
         std::vector<VoxelCluster> fragments;
-        
         if (fragmentation_enabled && voxel_world) {
-            // Get material ID from first voxel in cluster
-            uint8_t material_id = MaterialDatabase::CONCRETE;  // Default
+            uint8_t material_id = MaterialDatabase::CONCRETE;
             if (!cluster.voxel_positions.empty()) {
                 Voxel voxel = voxel_world->GetVoxel(cluster.voxel_positions[0]);
                 if (voxel.is_active) {
                     material_id = voxel.material_id;
                 }
             }
-            
-            // Fragment based on material
             fragments = fragmenter.FractureCluster(cluster, material_id);
         } else {
-            // No fragmentation - use original cluster
             fragments = {cluster};
         }
 
-        // Spawn each fragment as a separate debris body
+        // Prepare each fragment
         for (const auto& fragment : fragments) {
-            if (fragment.voxel_positions.empty()) {
-                continue;
+            if (fragment.voxel_positions.empty()) continue;
+
+            PreparedDebris prep;
+            prep.fragment = fragment;
+            prep.original_cluster_id = cluster.cluster_id;
+
+            // Calculate physics properties (all thread-safe, read-only operations)
+            prep.center_of_mass = CalculateCenterOfMass(fragment);
+            prep.mass = CalculateMass(fragment);
+
+            // Get material ID
+            if (voxel_world && !fragment.voxel_positions.empty()) {
+                Voxel voxel = voxel_world->GetVoxel(fragment.voxel_positions[0]);
+                if (voxel.is_active) {
+                    prep.material_id = voxel.material_id;
+                }
             }
 
-            // Calculate physics properties
-            Vector3 center_of_mass = CalculateCenterOfMass(fragment);
-            float mass = CalculateMass(fragment);
-
-            // Create collision shape (convex hull from voxels)
-            CollisionShapeHandle shape = CreateConvexHullFromVoxels(fragment);
-            if (!shape) {
-                // Fallback to bounding box if convex hull fails
-                shape = CreateBoundingBoxFromVoxels(fragment);
+            // Create collision shape (thread-safe, independent operation)
+            prep.shape = CreateConvexHullFromVoxels(fragment);
+            if (!prep.shape) {
+                prep.shape = CreateBoundingBoxFromVoxels(fragment);
             }
 
-            if (!shape) {
+            if (prep.shape) {
+                prep.valid = true;
+                prepared.push_back(prep);
+            } else {
+                std::lock_guard<std::mutex> lock(error_mutex);
                 std::cerr << "[VoxelPhysicsIntegration] Failed to create shape for fragment\n";
-                continue;
             }
+        }
+    });
+
+    // Step 3: Create rigid bodies sequentially (modifies physics world state)
+    for (size_t i = 0; i < prepared_per_cluster.size(); ++i) {
+        const auto& prepared_list = prepared_per_cluster[i];
+
+        for (const auto& prep : prepared_list) {
+            if (!prep.valid) continue;
 
             // Create rigid body
             RigidBodyDesc desc;
-            desc.transform.position = center_of_mass;
+            desc.transform.position = prep.center_of_mass;
             desc.transform.rotation = Quaternion::Identity();
-            desc.mass = mass;
-            desc.linear_damping = 0.1f;   // Slight air resistance
-            desc.angular_damping = 0.1f;  // Slight rotational damping
+            desc.mass = prep.mass;
+            desc.linear_damping = 0.1f;
+            desc.angular_damping = 0.1f;
             desc.friction = friction;
             desc.restitution = restitution;
-            desc.kinematic = false;  // Dynamic body
+            desc.kinematic = false;
 
             PhysicsBodyHandle body = physics_engine->CreateRigidBody(desc);
             if (!body) {
-                std::cerr << "[VoxelPhysicsIntegration] Failed to create body for fragment\n";
-                physics_engine->DestroyShape(shape);
+                std::cerr << "[VoxelPhysicsIntegration] Failed to create body\n";
+                physics_engine->DestroyShape(prep.shape);
                 continue;
             }
 
             // Attach shape to body
-            physics_engine->AttachShape(body, shape);
+            physics_engine->AttachShape(body, prep.shape);
 
-            // Week 5 Day 25: Apply material-specific velocity
-            if (material_velocities_enabled && voxel_world && !fragment.voxel_positions.empty()) {
-                Voxel voxel = voxel_world->GetVoxel(fragment.voxel_positions[0]);
-                if (voxel.is_active) {
-                    ApplyMaterialVelocity(body, voxel.material_id);
-                }
+            // Apply material-specific velocity
+            if (material_velocities_enabled && prep.material_id != 0) {
+                ApplyMaterialVelocity(body, prep.material_id);
             }
 
-            // Week 5 Day 29: Apply collision filtering (Bullet only)
+            // Apply collision filtering (Bullet only)
 #ifdef USE_BULLET
             btRigidBody* bt_body = static_cast<btRigidBody*>(body);
             if (bt_body && bt_body->getBroadphaseHandle()) {
@@ -137,14 +187,108 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
             }
 #endif
 
-            // Track debris (Week 5 Day 29: Include spawn time)
-            debris_bodies.emplace_back(body, shape, cluster.cluster_id,
-                                     fragment.voxel_positions.size(), simulation_time);
-
+            // Track debris
+            debris_bodies.emplace_back(body, prep.shape, prep.original_cluster_id,
+                                     prep.fragment.voxel_positions.size(), simulation_time);
             spawned_count++;
         }
 
-        // Mark original cluster as spawned (even if fragmented)
+        // Mark original cluster as spawned
+        if (!prepared_list.empty() && prepared_list[0].valid) {
+            cluster_to_debris[prepared_list[0].original_cluster_id] = debris_bodies.size() - 1;
+        }
+    }
+
+    if (spawned_count > 0) {
+        std::cout << "[VoxelPhysicsIntegration] Spawned " << spawned_count
+                  << " debris bodies (total: " << debris_bodies.size() << ") [PARALLEL]\n";
+    }
+
+    return spawned_count;
+}
+
+// Week 13 Day 43: Serial fallback implementation
+int VoxelPhysicsIntegration::SpawnDebrisSerial(const std::vector<VoxelCluster>& clusters) {
+    int spawned_count = 0;
+
+    for (const auto& cluster : clusters) {
+        if (IsClusterSpawned(cluster.cluster_id)) continue;
+        if (cluster.voxel_positions.empty()) continue;
+
+        // Fragment cluster based on material (if enabled)
+        std::vector<VoxelCluster> fragments;
+        if (fragmentation_enabled && voxel_world) {
+            uint8_t material_id = MaterialDatabase::CONCRETE;
+            if (!cluster.voxel_positions.empty()) {
+                Voxel voxel = voxel_world->GetVoxel(cluster.voxel_positions[0]);
+                if (voxel.is_active) {
+                    material_id = voxel.material_id;
+                }
+            }
+            fragments = fragmenter.FractureCluster(cluster, material_id);
+        } else {
+            fragments = {cluster};
+        }
+
+        // Spawn each fragment
+        for (const auto& fragment : fragments) {
+            if (fragment.voxel_positions.empty()) continue;
+
+            Vector3 center_of_mass = CalculateCenterOfMass(fragment);
+            float mass = CalculateMass(fragment);
+
+            CollisionShapeHandle shape = CreateConvexHullFromVoxels(fragment);
+            if (!shape) {
+                shape = CreateBoundingBoxFromVoxels(fragment);
+            }
+
+            if (!shape) {
+                std::cerr << "[VoxelPhysicsIntegration] Failed to create shape\n";
+                continue;
+            }
+
+            RigidBodyDesc desc;
+            desc.transform.position = center_of_mass;
+            desc.transform.rotation = Quaternion::Identity();
+            desc.mass = mass;
+            desc.linear_damping = 0.1f;
+            desc.angular_damping = 0.1f;
+            desc.friction = friction;
+            desc.restitution = restitution;
+            desc.kinematic = false;
+
+            PhysicsBodyHandle body = physics_engine->CreateRigidBody(desc);
+            if (!body) {
+                std::cerr << "[VoxelPhysicsIntegration] Failed to create body\n";
+                physics_engine->DestroyShape(shape);
+                continue;
+            }
+
+            physics_engine->AttachShape(body, shape);
+
+            if (material_velocities_enabled && voxel_world && !fragment.voxel_positions.empty()) {
+                Voxel voxel = voxel_world->GetVoxel(fragment.voxel_positions[0]);
+                if (voxel.is_active) {
+                    ApplyMaterialVelocity(body, voxel.material_id);
+                }
+            }
+
+#ifdef USE_BULLET
+            btRigidBody* bt_body = static_cast<btRigidBody*>(body);
+            if (bt_body && bt_body->getBroadphaseHandle()) {
+                short debris_mask = debris_collides_debris ?
+                    (COL_GROUND | COL_DEBRIS | COL_UNITS) :
+                    (COL_GROUND | COL_UNITS);
+                bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+                bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+            }
+#endif
+
+            debris_bodies.emplace_back(body, shape, cluster.cluster_id,
+                                     fragment.voxel_positions.size(), simulation_time);
+            spawned_count++;
+        }
+
         cluster_to_debris[cluster.cluster_id] = debris_bodies.size() - 1;
     }
 
