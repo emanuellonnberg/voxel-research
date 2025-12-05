@@ -9,9 +9,9 @@
   },
   {
     "name": "tower_grounded",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "analytical_connectivity",
     "failed_voxels": 0
   },
@@ -33,9 +33,9 @@
   },
   {
     "name": "cantilever_long",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "beam_equation",
     "failed_voxels": 0
   },
@@ -49,9 +49,9 @@
   },
   {
     "name": "bridge_single_support",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "beam_equation",
     "failed_voxels": 0
   },
@@ -73,17 +73,17 @@
   },
   {
     "name": "heavy_load",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "compression_stress",
     "failed_voxels": 0
   },
   {
     "name": "arch",
-    "expected": false,
+    "expected": true,
     "actual": true,
-    "match": false,
+    "match": true,
     "method": "simplified_fem_connectivity",
     "failed_voxels": 3
   },

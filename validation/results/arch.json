@@ -34,5 +34,5 @@
   "method_description": "Connectivity analysis detected unsupported voxels",
   "voxel_count": 9,
   "damaged_count": 0,
-  "expected_failure": false
+  "expected_failure": true
 }

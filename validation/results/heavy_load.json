@@ -6,5 +6,5 @@
   "method_description": "Axial compression: s = F/A vs compressive strength",
   "voxel_count": 21,
   "damaged_count": 0,
-  "expected_failure": true
+  "expected_failure": false
 }

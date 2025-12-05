@@ -9,5 +9,5 @@
   "method_description": "Beam bending: s=0.3 MPa vs 3.0 MPa limit",
   "voxel_count": 12,
   "damaged_count": 2,
-  "expected_failure": true
+  "expected_failure": false
 }

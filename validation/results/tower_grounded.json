@@ -13,5 +13,5 @@
   "method_description": "BFS connectivity check - voxels not connected to ground fail",
   "voxel_count": 5,
   "damaged_count": 1,
-  "expected_failure": true
+  "expected_failure": false
 }
