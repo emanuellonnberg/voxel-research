@@ -37,3 +37,9 @@ Thumbs.db
 # Dependencies (if vendored)
 external/
 _deps/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
