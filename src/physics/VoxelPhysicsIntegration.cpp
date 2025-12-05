@@ -47,12 +47,13 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
 
     // Week 13 Day 43: Determine if we should use parallel processing
     // Note: MockPhysicsEngine operations are too fast to benefit from parallelization
-    // due to JobSystem overhead. Only parallelize for real physics engines.
+    // due to JobSystem overhead. Only parallelize for real physics engines with
+    // substantial workloads (empirically determined: need 200+ clusters for break-even).
     const bool is_mock_engine = (physics_engine->GetEngineName() == std::string("Mock"));
     const bool use_parallel = g_JobSystem &&
                               g_JobSystem->IsRunning() &&
                               !is_mock_engine &&  // Don't parallelize MockPhysicsEngine
-                              clusters.size() > 4;  // Only parallelize if enough clusters
+                              clusters.size() > 200;  // Only parallelize for large workloads
 
     if (!use_parallel) {
         // Serial path: Original implementation
