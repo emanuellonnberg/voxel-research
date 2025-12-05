@@ -123,8 +123,9 @@ add_library(VoxelCore
     src/rendering/ParticleSystem.cpp
     src/rendering/VisualFeedback.cpp
 
-    # Structural analysis (Week 3-4)
+    # Structural analysis (Week 3-4, Week 8+: Max-Flow variant)
     src/structural/StructuralAnalyzer.cpp
+    src/structural/MaxFlowStructuralAnalyzer.cpp
     src/structural/ParameterTuning.cpp
     src/structural/VoxelFragmentation.cpp
 
@@ -176,6 +177,7 @@ if(BUILD_TESTS)
         tests/test_VoxelCluster.cpp
         tests/test_VoxelStability.cpp
         tests/test_StructuralAnalyzer.cpp
+        tests/test_MaxFlowStructuralAnalyzer.cpp
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
@@ -237,6 +239,12 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(ShowcaseDemo VoxelCore)
 
+    # Week 8+: Analyzer comparison (Spring vs Max-Flow)
+    add_executable(AnalyzerComparison
+        examples/analyzer_comparison.cpp
+    )
+    target_link_libraries(AnalyzerComparison VoxelCore)
+
     # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
@@ -244,6 +252,7 @@ if(BUILD_EXAMPLES)
         target_compile_definitions(PerformanceProfiling PRIVATE USE_BULLET)
         target_compile_definitions(ScenarioTests PRIVATE USE_BULLET)
         target_compile_definitions(ShowcaseDemo PRIVATE USE_BULLET)
+        target_compile_definitions(AnalyzerComparison PRIVATE USE_BULLET)
     endif()
 endif()
 
