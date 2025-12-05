@@ -80,6 +80,17 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
                 continue;
             }
 
+            uint8_t fragment_material = fragment.dominant_material;
+            if (fragment_material == 0 && voxel_world && !fragment.voxel_positions.empty()) {
+                Voxel voxel = voxel_world->GetVoxel(fragment.voxel_positions[0]);
+                if (voxel.is_active) {
+                    fragment_material = voxel.material_id;
+                }
+            }
+            if (fragment_material == 0) {
+                fragment_material = MaterialDatabase::CONCRETE;
+            }
+
             // Calculate physics properties
             Vector3 center_of_mass = CalculateCenterOfMass(fragment);
             float mass = CalculateMass(fragment);
@@ -118,11 +129,8 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
             physics_engine->AttachShape(body, shape);
 
             // Week 5 Day 25: Apply material-specific velocity
-            if (material_velocities_enabled && voxel_world && !fragment.voxel_positions.empty()) {
-                Voxel voxel = voxel_world->GetVoxel(fragment.voxel_positions[0]);
-                if (voxel.is_active) {
-                    ApplyMaterialVelocity(body, voxel.material_id);
-                }
+            if (material_velocities_enabled && voxel_world) {
+                ApplyMaterialVelocity(body, fragment_material);
             }
 
             // Week 5 Day 29: Apply collision filtering (Bullet only)
@@ -138,8 +146,12 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
 #endif
 
             // Track debris (Week 5 Day 29: Include spawn time)
-            debris_bodies.emplace_back(body, shape, cluster.cluster_id,
-                                     fragment.voxel_positions.size(), simulation_time);
+            debris_bodies.emplace_back(body,
+                                       shape,
+                                       cluster.cluster_id,
+                                       static_cast<int>(fragment.voxel_positions.size()),
+                                       simulation_time,
+                                       fragment_material);
 
             spawned_count++;
         }
@@ -261,6 +273,27 @@ void VoxelPhysicsIntegration::SetDebrisMaterial(float friction_val, float restit
 
 int VoxelPhysicsIntegration::GetDebrisCount() const {
     return static_cast<int>(debris_bodies.size());
+}
+
+void VoxelPhysicsIntegration::GetDebrisRenderData(std::vector<Transform>& out_transforms,
+                                                  std::vector<uint8_t>& out_material_ids) const {
+    out_transforms.clear();
+    out_material_ids.clear();
+
+    if (!physics_engine) {
+        return;
+    }
+
+    out_transforms.reserve(debris_bodies.size());
+    out_material_ids.reserve(debris_bodies.size());
+
+    for (const auto& debris : debris_bodies) {
+        if (!debris.body) {
+            continue;
+        }
+        out_transforms.push_back(physics_engine->GetBodyTransform(debris.body));
+        out_material_ids.push_back(debris.material_id);
+    }
 }
 
 bool VoxelPhysicsIntegration::IsClusterSpawned(uint32_t cluster_id) const {

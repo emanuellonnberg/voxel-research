@@ -156,6 +156,12 @@ public:
     int GetDebrisCount() const;
 
     /**
+     * Collect transforms/material IDs for rendering debris
+     */
+    void GetDebrisRenderData(std::vector<Transform>& out_transforms,
+                             std::vector<uint8_t>& out_material_ids) const;
+
+    /**
      * Check if a cluster has already been spawned
      * @param cluster_id Cluster ID to check
      */
@@ -246,12 +252,14 @@ private:
         CollisionShapeHandle shape;      // Collision shape handle
         uint32_t cluster_id;             // Original cluster ID
         int voxel_count;                 // Number of voxels in cluster
+        uint8_t material_id;             // Dominant material ID
         DebrisState state;               // Current state
         float time_below_threshold;      // Time spent below velocity thresholds
         float spawn_time;                // Time when debris was spawned (Week 5 Day 29)
 
-        DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count, float time = 0.0f)
-            : body(b), shape(s), cluster_id(id), voxel_count(count),
+        DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count,
+                   float time, uint8_t mat_id)
+            : body(b), shape(s), cluster_id(id), voxel_count(count), material_id(mat_id),
               state(DebrisState::ACTIVE), time_below_threshold(0.0f), spawn_time(time) {}
     };
 

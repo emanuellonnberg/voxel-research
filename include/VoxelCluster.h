@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_set>
 #include <queue>
+#include <cstdint>
 
 /**
  * VoxelCluster - Represents a connected group of voxels
@@ -24,8 +25,13 @@ struct VoxelCluster {
     float total_mass;                      // Sum of all voxel masses
     BoundingBox bounds;                    // Axis-aligned bounding box
     size_t cluster_id;                     // Unique identifier
+    uint8_t dominant_material;             // Dominant material id (optional)
 
-    VoxelCluster() : center_of_mass(0, 0, 0), total_mass(0.0f), cluster_id(0) {}
+    VoxelCluster()
+        : center_of_mass(0, 0, 0)
+        , total_mass(0.0f)
+        , cluster_id(0)
+        , dominant_material(0) {}
 
     size_t GetVoxelCount() const { return voxel_positions.size(); }
     bool IsEmpty() const { return voxel_positions.empty(); }

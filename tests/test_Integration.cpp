@@ -3,6 +3,7 @@
 #include "StructuralAnalyzer.h"
 #include "VoxelPhysicsIntegration.h"
 #include "Material.h"
+#include <chrono>
 
 #ifdef USE_BULLET
 #include "BulletEngine.h"

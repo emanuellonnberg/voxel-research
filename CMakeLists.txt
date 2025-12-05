@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(VoxelDestruction VERSION 0.1.0 LANGUAGES CXX)
+project(VoxelDestruction VERSION 0.1.0 LANGUAGES C CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -139,6 +139,9 @@ target_include_directories(VoxelCore PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
     $<$<BOOL:${USE_BULLET}>:${CMAKE_SOURCE_DIR}/third_party/bullet3/src>
+    $<$<BOOL:${RENDERING_ENABLED}>:${CMAKE_SOURCE_DIR}/third_party/glad/include>
+    $<$<BOOL:${RENDERING_ENABLED}>:${CMAKE_BINARY_DIR}/gladsources/glad/include>
+    $<$<BOOL:${RENDERING_ENABLED}>:${CMAKE_SOURCE_DIR}/third_party/glfw/include>
 )
 
 # Link Bullet libraries if enabled

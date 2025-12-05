@@ -47,7 +47,7 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         wood.static_friction = 0.6f;
         wood.dynamic_friction = 0.5f;
         wood.restitution = 0.4f;                  // Slightly bouncy
-        wood.color = Color(0.6f, 0.4f, 0.2f);     // Brown
+        wood.color = Color(0.72f, 0.5f, 0.28f);    // Warm brown
         RegisterMaterial(wood);
     }
 
@@ -64,7 +64,7 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         brick.static_friction = 0.8f;
         brick.dynamic_friction = 0.7f;
         brick.restitution = 0.2f;                 // Not very bouncy
-        brick.color = Color(0.8f, 0.3f, 0.2f);    // Red-brown
+        brick.color = Color(0.85f, 0.23f, 0.18f);   // Vibrant brick red
         RegisterMaterial(brick);
     }
 
@@ -81,7 +81,7 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         concrete.static_friction = 0.9f;
         concrete.dynamic_friction = 0.8f;
         concrete.restitution = 0.1f;              // Very little bounce
-        concrete.color = Color(0.6f, 0.6f, 0.6f); // Gray
+        concrete.color = Color(0.75f, 0.77f, 0.80f); // Light gray
         RegisterMaterial(concrete);
     }
 
@@ -98,7 +98,7 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         steel.static_friction = 0.7f;
         steel.dynamic_friction = 0.6f;
         steel.restitution = 0.5f;                 // Moderately bouncy
-        steel.color = Color(0.7f, 0.7f, 0.8f);    // Metallic gray-blue
+        steel.color = Color(0.6f, 0.72f, 0.85f);    // Cool metallic
         RegisterMaterial(steel);
     }
 }

@@ -5,6 +5,7 @@
 #include "VoxelUtils.h"
 #include "Material.h"
 #include <fstream>
+#include <chrono>
 
 class StructuralAnalyzerTest : public ::testing::Test {
 protected:

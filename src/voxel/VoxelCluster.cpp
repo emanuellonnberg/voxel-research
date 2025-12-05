@@ -93,6 +93,7 @@ void VoxelClustering::CalculateClusterProperties(const VoxelWorld& world, VoxelC
         cluster.center_of_mass = Vector3(0, 0, 0);
         cluster.total_mass = 0.0f;
         cluster.bounds = BoundingBox();
+        cluster.dominant_material = 0;
         return;
     }
 
@@ -106,6 +107,8 @@ void VoxelClustering::CalculateClusterProperties(const VoxelWorld& world, VoxelC
     Vector3 min_bounds = cluster.voxel_positions[0];
     Vector3 max_bounds = cluster.voxel_positions[0];
 
+    cluster.dominant_material = 0;
+
     for (const auto& pos : cluster.voxel_positions) {
         Voxel voxel = world.GetVoxel(pos);
         const Material& mat = g_materials.GetMaterial(voxel.material_id);
@@ -113,6 +116,10 @@ void VoxelClustering::CalculateClusterProperties(const VoxelWorld& world, VoxelC
         float voxel_mass = mat.density * voxel_volume;
         com += pos * voxel_mass;
         total_mass += voxel_mass;
+
+        if (cluster.dominant_material == 0 && voxel.is_active) {
+            cluster.dominant_material = voxel.material_id;
+        }
 
         // Update bounds
         min_bounds.x = std::min(min_bounds.x, pos.x);
