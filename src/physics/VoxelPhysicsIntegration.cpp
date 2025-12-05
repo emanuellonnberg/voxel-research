@@ -177,13 +177,16 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
 
             // Apply collision filtering (Bullet only)
 #ifdef USE_BULLET
-            btRigidBody* bt_body = static_cast<btRigidBody*>(body);
-            if (bt_body && bt_body->getBroadphaseHandle()) {
-                short debris_mask = debris_collides_debris ?
-                    (COL_GROUND | COL_DEBRIS | COL_UNITS) :
-                    (COL_GROUND | COL_UNITS);
-                bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
-                bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+            // Only cast to Bullet types if we're using BulletEngine
+            if (physics_engine->GetEngineName() == std::string("Bullet")) {
+                btRigidBody* bt_body = static_cast<btRigidBody*>(body);
+                if (bt_body && bt_body->getBroadphaseHandle()) {
+                    short debris_mask = debris_collides_debris ?
+                        (COL_GROUND | COL_DEBRIS | COL_UNITS) :
+                        (COL_GROUND | COL_UNITS);
+                    bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+                    bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+                }
             }
 #endif
 
@@ -274,13 +277,16 @@ int VoxelPhysicsIntegration::SpawnDebrisSerial(const std::vector<VoxelCluster>& 
             }
 
 #ifdef USE_BULLET
-            btRigidBody* bt_body = static_cast<btRigidBody*>(body);
-            if (bt_body && bt_body->getBroadphaseHandle()) {
-                short debris_mask = debris_collides_debris ?
-                    (COL_GROUND | COL_DEBRIS | COL_UNITS) :
-                    (COL_GROUND | COL_UNITS);
-                bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
-                bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+            // Only cast to Bullet types if we're using BulletEngine
+            if (physics_engine->GetEngineName() == std::string("Bullet")) {
+                btRigidBody* bt_body = static_cast<btRigidBody*>(body);
+                if (bt_body && bt_body->getBroadphaseHandle()) {
+                    short debris_mask = debris_collides_debris ?
+                        (COL_GROUND | COL_DEBRIS | COL_UNITS) :
+                        (COL_GROUND | COL_UNITS);
+                    bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+                    bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+                }
             }
 #endif
 
