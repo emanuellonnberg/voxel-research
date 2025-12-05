@@ -37,3 +37,4 @@ Thumbs.db
 # Dependencies (if vendored)
 external/
 _deps/
+build-tests/

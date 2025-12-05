@@ -2,6 +2,12 @@
 #include <iostream>
 #include <algorithm>
 
+#ifdef USE_BULLET
+#include <btBulletDynamicsCommon.h>
+#include "ImpactDetector.h"
+#include "BulletEngine.h"
+#endif
+
 VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWorld* world)
     : physics_engine(engine)
     , voxel_world(world)
@@ -120,13 +126,15 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
 
             // Week 5 Day 29: Apply collision filtering (Bullet only)
 #ifdef USE_BULLET
-            btRigidBody* bt_body = static_cast<btRigidBody*>(body);
-            if (bt_body && bt_body->getBroadphaseHandle()) {
-                short debris_mask = debris_collides_debris ?
-                    (COL_GROUND | COL_DEBRIS | COL_UNITS) :
-                    (COL_GROUND | COL_UNITS);
-                bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
-                bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+            if (dynamic_cast<BulletEngine*>(physics_engine)) {
+                btRigidBody* bt_body = static_cast<btRigidBody*>(body);
+                if (bt_body && bt_body->getBroadphaseHandle()) {
+                    short debris_mask = debris_collides_debris ?
+                        (COL_GROUND | COL_DEBRIS | COL_UNITS) :
+                        (COL_GROUND | COL_UNITS);
+                    bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+                    bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+                }
             }
 #endif
 
@@ -545,11 +553,6 @@ int VoxelPhysicsIntegration::ConvertSettledToStatic() {
 
 // ===== Impact Detection (Week 5 Day 28) =====
 
-#ifdef USE_BULLET
-#include "ImpactDetector.h"
-#include "BulletEngine.h"
-#endif
-
 void VoxelPhysicsIntegration::EnableImpactDetection(ParticleSystem* particle_system, float impulse_threshold) {
 #ifdef USE_BULLET
     // Disable existing detector if any
@@ -719,26 +722,31 @@ int VoxelPhysicsIntegration::RemoveDebrisBeyondDistance(const Vector3& position,
     while (it != debris_bodies.end()) {
         // Get debris position (use Bullet directly when available)
         Vector3 debris_pos;
+        bool used_bullet_path = false;
 
 #ifdef USE_BULLET
-        btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
-        if (bt_body) {
-            btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
-            debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
-        } else {
-            ++it;
-            continue;
+        if (dynamic_cast<BulletEngine*>(physics_engine)) {
+            used_bullet_path = true;
+            btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
+            if (bt_body) {
+                btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
+                debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
+            } else {
+                ++it;
+                continue;
+            }
         }
-#else
-        // For non-Bullet engines, use velocity as proxy (simplified)
-        Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
-        if (vel.Length() < 0.01f) {
-            // Assume settled debris is at spawn position (simplified)
-            ++it;
-            continue;
-        }
-        debris_pos = Vector3::Zero(); // Fallback
 #endif
+        if (!used_bullet_path) {
+            // For non-Bullet engines (or Mock), use velocity as proxy (simplified)
+            Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
+            if (vel.Length() < 0.01f) {
+                // Assume settled debris is at spawn position (simplified)
+                ++it;
+                continue;
+            }
+            debris_pos = Vector3::Zero(); // Fallback
+        }
 
         Vector3 delta = debris_pos - position;
         float distance_sq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;

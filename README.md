@@ -37,6 +37,9 @@ voxel-research/
 - ✅ Voxel clustering and connected components (18 tests)
 - ✅ Structural stability analysis system (26 tests)
 - ✅ Support chain analysis and ground detection
+- ✅ Per-material support-distance heuristics (weak materials collapse faster when far from ground)
+- ✅ Per-material stack-depth heuristics (voxels require direct downward support before spanning)
+- ✅ Load-redistribution mode (per-material load ratios, capacity scaling, iterative balancing + telemetry)
 - ✅ Stability metrics (COM, tip risk, support area)
 - ✅ **Structural integrity analyzer with spring system (49 tests)**
 - ✅ **Displacement-based failure detection**
@@ -55,6 +58,7 @@ voxel-research/
   - **Early termination detection (9x fewer iterations)**
 - ✅ **Day 17: Parameter tuning system**
   - **INI file save/load for parameters**
+  - **Structural mode selection + load redistribution knobs persisted via config**
   - **Parameter sensitivity analysis tools**
   - **Auto-tuning with grid search**
   - **Optimal parameter configurations (default + optimal)**
@@ -120,6 +124,11 @@ voxel-research/
   - **Edge case validation (empty world, single voxel, etc.)**
   - **Repeated analysis consistency tests**
   - **All integration tests passing with Bullet Physics**
+- ✅ **Week 5 Day 24B: Physics Proxy Structural Mode**
+  - **PhysicsProxySimulator builds a temporary Bullet scene around damaged nodes and runs a burst simulation**
+  - **Configurable selection radius, body count, simulation time, timestep, and failure thresholds (INI-driven)**
+  - **StructuralAnalyzer reports proxy telemetry via `AnalysisResult` and marks returned node IDs as failed clusters**
+  - **Automatic heuristic fallback when Bullet is unavailable plus regression tests for proxy selection**
 - ✅ **Week 5 Day 25: Material-Specific Fracture Behaviors**
   - **VoxelFragmentation system for realistic breakage patterns:**
     - **Wood: Splits into 3-6 elongated splinters (along grain)**
@@ -282,12 +291,18 @@ Comprehensive documentation is available in the `docs/` directory:
 - **[Parameter Tuning Guide](docs/PARAMETER_TUNING_GUIDE.md)** - Optimize performance and accuracy
 - **[PhysX Integration Guide](docs/PHYSX_INTEGRATION_GUIDE.md)** - Connect with NVIDIA PhysX physics engine
 - **[Week 4 Summary](docs/WEEK4_SUMMARY.md)** - Complete Week 4 accomplishments and metrics
+- **[Load Redistribution Benchmark](docs/LOAD_REDISTRIBUTION_BENCHMARK.md)** - Runtime/behavioral comparisons for the new structural modes
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
 - **Week 3-4:** Track 1 - Structural integrity analysis
 - **Week 5-6:** Track 3 - Physics integration (PhysX)
 - **Week 7-8:** Integration and polish
+- **Research Task:** Structural analyzer load-redistribution / hybrid support heuristics to capture progressive collapse scenarios.
+  1. **Heuristic Support Mode (current):** Displacement + ground-connectivity failure, with per-material support-distance thresholds.
+  2. **Stack-Depth Mode (implemented):** Require per-material vertical support stacks; nodes fail when local stack height drops below the threshold.
+  3. **Load-Redistribution Mode (implemented):** Iteratively rebalance supported mass through the spring graph when supports disappear; configurable iteration/tolerance/ground absorption settings plus telemetry flag nodes whose redistributed load exceeds material limits.
+  4. **Physics-Proxy Mode (implemented):** Build a lightweight Bullet proxy of the affected region, simulate briefly to detect overstressed beams, then tear down until further damage occurs. Settings live in `docs/STRUCTURAL_MODES_PLAN.md` and config files, and the analyzer falls back on heuristic modes automatically if Bullet is unavailable.
 
 ## Dependencies
 

@@ -92,4 +92,7 @@ public:
     int GetBodyCount() const override;
     const char* GetEngineName() const override;
     const char* GetEngineVersion() const override;
+
+    // Bullet-only accessors
+    btDiscreteDynamicsWorld* GetDynamicsWorld() const { return dynamics_world; }
 };

@@ -131,6 +131,7 @@ add_library(VoxelCore
     $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
     src/physics/VoxelPhysicsIntegration.cpp
     src/physics/RubbleSystem.cpp
+    src/physics/PhysicsProxySimulator.cpp
     $<$<BOOL:${USE_BULLET}>:src/physics/ImpactDetector.cpp>
 )
 
@@ -143,6 +144,7 @@ target_include_directories(VoxelCore PUBLIC
 # Link libraries
 if(USE_BULLET)
     target_link_libraries(VoxelCore PUBLIC ${BULLET_LIBRARIES})
+    set_source_files_properties(src/physics/PhysicsProxySimulator.cpp PROPERTIES COMPILE_DEFINITIONS USE_BULLET)
 endif()
 
 # Link OpenGL libraries if rendering is enabled
