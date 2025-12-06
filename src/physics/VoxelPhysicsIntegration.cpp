@@ -216,6 +216,13 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
                         world->removeRigidBody(bt_body);
                         world->addRigidBody(bt_body, COL_DEBRIS, debris_mask);
 
+                        // Force broadphase to recalculate collision pairs
+                        world->updateAabbs();
+                        world->getBroadphase()->calculateOverlappingPairs(world->getDispatcher());
+
+                        // Ensure body is active
+                        bt_body->activate(true);
+
                         std::cout << "[VoxelPhysicsIntegration] Debris collision filtering:\n";
                         std::cout << "  Group: 0x" << std::hex << static_cast<int>(COL_DEBRIS) << std::dec << " (COL_DEBRIS)\n";
                         std::cout << "  Mask:  0x" << std::hex << debris_mask << std::dec << "\n";
@@ -322,7 +329,8 @@ int VoxelPhysicsIntegration::SpawnDebrisSerial(const std::vector<VoxelCluster>& 
             }
 
 #ifdef USE_BULLET
-            if (dynamic_cast<BulletEngine*>(physics_engine)) {
+            // DEBUG: Temporarily disable collision filtering to test if collisions work at all
+            if (false && dynamic_cast<BulletEngine*>(physics_engine)) {
                 BulletEngine* bullet_engine = static_cast<BulletEngine*>(physics_engine);
                 btRigidBody* bt_body = static_cast<btRigidBody*>(body);
                 std::cout << "[VoxelPhysicsIntegration] SpawnDebrisSerial: bt_body=" << bt_body << "\n";
@@ -338,11 +346,20 @@ int VoxelPhysicsIntegration::SpawnDebrisSerial(const std::vector<VoxelCluster>& 
                         world->removeRigidBody(bt_body);
                         world->addRigidBody(bt_body, COL_DEBRIS, debris_mask);
 
+                        // Force broadphase to recalculate collision pairs
+                        world->updateAabbs();
+                        world->getBroadphase()->calculateOverlappingPairs(world->getDispatcher());
+
+                        // Ensure body is active
+                        bt_body->activate(true);
+
                         std::cout << "[VoxelPhysicsIntegration] SpawnDebrisSerial collision filtering:\n";
                         std::cout << "  Group: 0x" << std::hex << static_cast<int>(COL_DEBRIS) << std::dec << " (COL_DEBRIS)\n";
                         std::cout << "  Mask:  0x" << std::hex << debris_mask << std::dec << "\n";
                     }
                 }
+            } else {
+                std::cout << "[VoxelPhysicsIntegration] DEBUG: Collision filtering DISABLED for testing\n";
             }
 #endif
 

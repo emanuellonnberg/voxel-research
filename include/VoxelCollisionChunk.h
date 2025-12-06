@@ -29,7 +29,7 @@ public:
 #ifdef USE_BULLET
     btRigidBody* rigid_body = nullptr;
     btTriangleMesh* triangle_mesh = nullptr;
-    btBvhTriangleMeshShape* collision_shape = nullptr;
+    btCollisionShape* collision_shape = nullptr;  // Can be btBvhTriangleMeshShape or btBoxShape
     btDefaultMotionState* motion_state = nullptr;
 #endif
 

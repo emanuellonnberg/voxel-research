@@ -146,17 +146,42 @@ void VoxelCollisionChunk::AddToPhysicsWorld(btDiscreteDynamicsWorld* world) {
         return;  // Empty chunk, nothing to add
     }
 
-    // Create BVH triangle mesh shape
-    // NOTE: useQuantizedAabbCompression = true for better performance
-    collision_shape = new btBvhTriangleMeshShape(
-        triangle_mesh,
-        true,  // useQuantizedAabbCompression
-        true   // buildBvh
-    );
+    // DEBUG: Use simple box shape instead of triangle mesh to test collision
+    std::cout << "[VoxelCollisionChunk] DEBUG: Creating btBoxShape instead of triangle mesh\n";
+    btVector3 half_extents(0.025f, 0.25f, 0.025f);  // 0.05m x 0.5m x 0.05m box (tower dimensions)
+    collision_shape = new btBoxShape(half_extents);
+    collision_shape->setMargin(0.001f);
 
-    // Create transform (identity - mesh already in world space)
+    std::cout << "[VoxelCollisionChunk] Created Box shape with half_extents=("
+              << half_extents.x() << "," << half_extents.y() << "," << half_extents.z() << ")\n";
+
+    // // Create BVH triangle mesh shape
+    // // NOTE: useQuantizedAabbCompression = false for better accuracy
+    // // buildBvh = true for faster queries
+    // collision_shape = new btBvhTriangleMeshShape(
+    //     triangle_mesh,
+    //     false,  // useQuantizedAabbCompression - false for better accuracy with small voxels
+    //     true    // buildBvh
+    // );
+
+    // // Set smaller collision margin for better accuracy with small voxels (default is 0.04m)
+    // collision_shape->setMargin(0.001f);  // 1mm margin
+
+    // std::cout << "[VoxelCollisionChunk] Created BVH shape with margin=" << collision_shape->getMargin() << "m\n";
+
+    // // Get AABB to verify shape bounds
+    // btVector3 aabb_min, aabb_max;
+    // collision_shape->getAabb(btTransform::getIdentity(), aabb_min, aabb_max);
+    // std::cout << "[VoxelCollisionChunk] Shape AABB: min=(" << aabb_min.x() << "," << aabb_min.y() << "," << aabb_min.z()
+    //           << ") max=(" << aabb_max.x() << "," << aabb_max.y() << "," << aabb_max.z() << ")\n";
+
+    // Create transform (offset to center the box at the tower location)
     btTransform transform;
     transform.setIdentity();
+    // Box is centered at origin, so offset by half_extents to match tower position
+    transform.setOrigin(btVector3(0.025f, 0.25f, 0.025f));
+    std::cout << "[VoxelCollisionChunk] Transform origin=(" << transform.getOrigin().x() << ","
+              << transform.getOrigin().y() << "," << transform.getOrigin().z() << ")\n";
 
     // Create motion state
     motion_state = new btDefaultMotionState(transform);
@@ -176,6 +201,8 @@ void VoxelCollisionChunk::AddToPhysicsWorld(btDiscreteDynamicsWorld* world) {
         rigid_body->getCollisionFlags() |
         btCollisionObject::CF_STATIC_OBJECT
     );
+    std::cout << "[VoxelCollisionChunk] Set CF_STATIC_OBJECT flag, collision flags=0x"
+              << std::hex << rigid_body->getCollisionFlags() << std::dec << "\n";
 
     // Set friction and restitution
     rigid_body->setFriction(0.9f);      // High friction
@@ -185,16 +212,32 @@ void VoxelCollisionChunk::AddToPhysicsWorld(btDiscreteDynamicsWorld* world) {
     rigid_body->setUserIndex(COL_VOXELS);
     rigid_body->setUserPointer(this);
 
-    // Add to physics world with collision filtering
-    short my_group = COL_VOXELS;
-    short my_mask = COL_DEBRIS | COL_UNITS | COL_PROJECTILES | COL_GROUND;
+    // DEBUG: Check world before/after adding body
+    int num_before = world->getNumCollisionObjects();
+    std::cout << "[VoxelCollisionChunk] Physics world has " << num_before << " objects before adding\n";
 
-    std::cout << "[VoxelCollisionChunk] Adding rigid body with collision filtering:\n";
-    std::cout << "  Group: 0x" << std::hex << my_group << std::dec << " (COL_VOXELS)\n";
-    std::cout << "  Mask:  0x" << std::hex << my_mask << std::dec
-              << " (DEBRIS|UNITS|PROJECTILES|GROUND)\n";
+    // DEBUG: Temporarily add without collision filtering to test
+    std::cout << "[VoxelCollisionChunk] DEBUG: Adding rigid body WITHOUT collision filtering\n";
+    world->addRigidBody(rigid_body);
 
-    world->addRigidBody(rigid_body, my_group, my_mask);
+    int num_after = world->getNumCollisionObjects();
+    std::cout << "[VoxelCollisionChunk] Physics world has " << num_after << " objects after adding (added=" << (num_after - num_before) << ")\n";
+
+    // Force broadphase to recalculate after adding static body
+    world->updateAabbs();
+    world->getBroadphase()->calculateOverlappingPairs(world->getDispatcher());
+    std::cout << "[VoxelCollisionChunk] Forced broadphase update\n";
+
+    // // Add to physics world with collision filtering
+    // short my_group = COL_VOXELS;
+    // short my_mask = COL_DEBRIS | COL_UNITS | COL_PROJECTILES | COL_GROUND;
+
+    // std::cout << "[VoxelCollisionChunk] Adding rigid body with collision filtering:\n";
+    // std::cout << "  Group: 0x" << std::hex << my_group << std::dec << " (COL_VOXELS)\n";
+    // std::cout << "  Mask:  0x" << std::hex << my_mask << std::dec
+    //           << " (DEBRIS|UNITS|PROJECTILES|GROUND)\n";
+
+    // world->addRigidBody(rigid_body, my_group, my_mask);
 }
 
 void VoxelCollisionChunk::RemoveFromPhysicsWorld(btDiscreteDynamicsWorld* world) {
