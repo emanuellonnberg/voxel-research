@@ -1,20 +1,11 @@
 {
-  "structure_name": "l_shape_damaged",
+  "structure_name": "multi_level_frame",
   "fem_solver": "simplified_fem_connectivity",
   "should_fail": true,
   "failed_voxels": [
     {
       "position": [
-        0.05,
-        0.1,
-        0.0
-      ],
-      "stress": 0.0,
-      "failure_mode": "unsupported"
-    },
-    {
-      "position": [
-        0.1,
+        0.15000000000000002,
         0.1,
         0.0
       ],
@@ -24,7 +15,7 @@
     {
       "position": [
         0.15000000000000002,
-        0.1,
+        0.15000000000000002,
         0.0
       ],
       "stress": 0.0,
@@ -32,7 +23,7 @@
     }
   ],
   "method_description": "Connectivity analysis detected unsupported voxels",
-  "voxel_count": 6,
-  "damaged_count": 1,
+  "voxel_count": 12,
+  "damaged_count": 4,
   "expected_failure": true
 }

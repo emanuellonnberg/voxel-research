@@ -226,10 +226,10 @@ TEST_F(FragmentationTest, GetClusterSize_CorrectDimensions) {
 
     Vector3 size = fragmenter->GetClusterSize(cluster);
 
-    // Size should be approximately (10*0.05, 5*0.05, 3*0.05) = (0.5, 0.25, 0.15)
-    EXPECT_NEAR(size.x, 0.45f, 0.1f);  // 9 gaps * 0.05
-    EXPECT_NEAR(size.y, 0.2f, 0.1f);   // 4 gaps * 0.05
-    EXPECT_NEAR(size.z, 0.1f, 0.1f);   // 2 gaps * 0.05
+    // Size now measures physical extent (voxel count * voxel size)
+    EXPECT_NEAR(size.x, 0.5f, 0.02f);
+    EXPECT_NEAR(size.y, 0.25f, 0.02f);
+    EXPECT_NEAR(size.z, 0.15f, 0.02f);
 }
 
 TEST_F(FragmentationTest, GetLongestAxis_IdentifiesCorrectAxis) {

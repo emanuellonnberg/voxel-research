@@ -1,5 +1,6 @@
 #include "VoxelPhysicsIntegration.h"
 #include "JobSystem.h"  // Week 13 Day 43: Parallel debris spawning
+#include "MockPhysicsEngine.h"  // For dynamic_cast checks
 #include <iostream>
 #include <algorithm>
 #include <mutex>  // Week 13 Day 43: Thread safety for debris spawning
@@ -49,7 +50,7 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
     // Note: MockPhysicsEngine operations are too fast to benefit from parallelization
     // due to JobSystem overhead. Only parallelize for real physics engines with
     // substantial workloads (empirically determined: need 200+ clusters for break-even).
-    const bool is_mock_engine = (physics_engine->GetEngineName() == std::string("Mock"));
+    const bool is_mock_engine = dynamic_cast<MockPhysicsEngine*>(physics_engine) != nullptr;
     const bool use_parallel = g_JobSystem &&
                               g_JobSystem->IsRunning() &&
                               !is_mock_engine &&  // Don't parallelize MockPhysicsEngine
@@ -182,8 +183,7 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
 
             // Apply collision filtering (Bullet only)
 #ifdef USE_BULLET
-            // Only cast to Bullet types if we're using BulletEngine
-            if (physics_engine->GetEngineName() == std::string("Bullet")) {
+            if (dynamic_cast<BulletEngine*>(physics_engine)) {
                 btRigidBody* bt_body = static_cast<btRigidBody*>(body);
                 if (bt_body && bt_body->getBroadphaseHandle()) {
                     short debris_mask = debris_collides_debris ?
@@ -282,8 +282,7 @@ int VoxelPhysicsIntegration::SpawnDebrisSerial(const std::vector<VoxelCluster>& 
             }
 
 #ifdef USE_BULLET
-            // Only cast to Bullet types if we're using BulletEngine
-            if (physics_engine->GetEngineName() == std::string("Bullet")) {
+            if (dynamic_cast<BulletEngine*>(physics_engine)) {
                 btRigidBody* bt_body = static_cast<btRigidBody*>(body);
                 if (bt_body && bt_body->getBroadphaseHandle()) {
                     short debris_mask = debris_collides_debris ?
@@ -876,26 +875,31 @@ int VoxelPhysicsIntegration::RemoveDebrisBeyondDistance(const Vector3& position,
     while (it != debris_bodies.end()) {
         // Get debris position (use Bullet directly when available)
         Vector3 debris_pos;
+        bool used_bullet_path = false;
 
 #ifdef USE_BULLET
-        btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
-        if (bt_body) {
-            btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
-            debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
-        } else {
-            ++it;
-            continue;
+        if (dynamic_cast<BulletEngine*>(physics_engine)) {
+            used_bullet_path = true;
+            btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
+            if (bt_body) {
+                btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
+                debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
+            } else {
+                ++it;
+                continue;
+            }
         }
-#else
-        // For non-Bullet engines, use velocity as proxy (simplified)
-        Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
-        if (vel.Length() < 0.01f) {
-            // Assume settled debris is at spawn position (simplified)
-            ++it;
-            continue;
-        }
-        debris_pos = Vector3::Zero(); // Fallback
 #endif
+        if (!used_bullet_path) {
+            // For non-Bullet engines (or Mock), use velocity as proxy (simplified)
+            Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
+            if (vel.Length() < 0.01f) {
+                // Assume settled debris is at spawn position (simplified)
+                ++it;
+                continue;
+            }
+            debris_pos = Vector3::Zero(); // Fallback
+        }
 
         Vector3 delta = debris_pos - position;
         float distance_sq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;

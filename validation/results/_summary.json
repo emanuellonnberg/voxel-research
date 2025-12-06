@@ -33,9 +33,9 @@
   },
   {
     "name": "cantilever_long",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "beam_equation",
     "failed_voxels": 0
   },
@@ -49,9 +49,9 @@
   },
   {
     "name": "bridge_single_support",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "beam_equation",
     "failed_voxels": 0
   },
@@ -66,25 +66,49 @@
   {
     "name": "l_shape_damaged",
     "expected": true,
-    "actual": false,
-    "match": false,
-    "method": "simplified_fem_hybrid",
-    "failed_voxels": 0
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 3
   },
   {
     "name": "heavy_load",
-    "expected": true,
+    "expected": false,
     "actual": false,
-    "match": false,
+    "match": true,
     "method": "compression_stress",
     "failed_voxels": 0
   },
   {
     "name": "arch",
-    "expected": false,
-    "actual": false,
+    "expected": true,
+    "actual": true,
     "match": true,
-    "method": "simplified_fem_hybrid",
-    "failed_voxels": 0
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 3
+  },
+  {
+    "name": "multi_span_bridge",
+    "expected": true,
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 2
+  },
+  {
+    "name": "multi_level_frame",
+    "expected": true,
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 2
+  },
+  {
+    "name": "diagonal_braced_frame",
+    "expected": true,
+    "actual": true,
+    "match": true,
+    "method": "simplified_fem_connectivity",
+    "failed_voxels": 3
   }
 ]

@@ -3,7 +3,7 @@
   "fem_solver": "simplified_fem_hybrid",
   "should_fail": false,
   "failed_voxels": [],
-  "method_description": "Connectivity + compression stress estimation",
+  "method_description": "Connectivity + load propagation + compression stress estimation",
   "voxel_count": 6,
   "damaged_count": 0,
   "expected_failure": false

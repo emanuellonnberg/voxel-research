@@ -3,6 +3,13 @@
   "fem_solver": "analytical_connectivity",
   "should_fail": false,
   "failed_voxels": [],
+  "distance_to_ground": [
+    0.0,
+    1.0,
+    2.0,
+    3.0,
+    4.0
+  ],
   "method_description": "BFS connectivity check - voxels not connected to ground fail",
   "voxel_count": 5,
   "damaged_count": 1,

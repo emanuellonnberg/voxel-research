@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cmath>
 #include <chrono>
+#include <limits>
+#include <set>
 
 VoxelFragmentation::VoxelFragmentation()
     : rng(std::chrono::steady_clock::now().time_since_epoch().count()),
@@ -59,6 +61,37 @@ std::vector<VoxelCluster> VoxelFragmentation::SplitIntoSplinters(
 
     // Split perpendicular to longest axis (wood grain)
     int num_splinters = RandomRange(3, 6);
+    auto count_unique = [&](int axis) {
+        std::set<float> values;
+        for (const auto& pos : cluster.voxel_positions) {
+            if (axis == 0) {
+                values.insert(pos.x);
+            } else if (axis == 1) {
+                values.insert(pos.y);
+            } else {
+                values.insert(pos.z);
+            }
+        }
+        return static_cast<int>(values.size());
+    };
+
+    int unique_layers = count_unique(longest_axis);
+    if (unique_layers > 0) {
+        num_splinters = std::min(num_splinters, unique_layers);
+
+        float axis_length = (longest_axis == 0) ? size.x : (longest_axis == 1) ? size.y : size.z;
+        float cross_a = (longest_axis == 0) ? size.y : size.x;
+        float cross_b = (longest_axis == 2) ? size.y : size.z;
+        float max_cross = std::max(cross_a, cross_b);
+        bool is_slender = (max_cross < 1e-4f) ? true : (axis_length / max_cross > 2.0f);
+
+        if (is_slender) {
+            int slender_max = std::max(1, unique_layers / 3);
+            num_splinters = std::min(num_splinters, slender_max);
+        }
+
+        num_splinters = std::max(1, num_splinters);
+    }
 
     // Get bounds along split axis
     float min_coord, max_coord;
@@ -265,7 +298,45 @@ std::vector<VoxelCluster> VoxelFragmentation::ShatterIntoShards(
 // ===== Utility Functions =====
 
 Vector3 VoxelFragmentation::GetClusterSize(const VoxelCluster& cluster) {
-    return cluster.bounds.max - cluster.bounds.min;
+    Vector3 size = cluster.bounds.max - cluster.bounds.min;
+    if (cluster.voxel_positions.empty()) {
+        return size;
+    }
+
+    auto infer_step = [&](int axis) {
+        std::vector<float> coords;
+        coords.reserve(cluster.voxel_positions.size());
+
+        for (const auto& pos : cluster.voxel_positions) {
+            if (axis == 0) {
+                coords.push_back(pos.x);
+            } else if (axis == 1) {
+                coords.push_back(pos.y);
+            } else {
+                coords.push_back(pos.z);
+            }
+        }
+
+        std::sort(coords.begin(), coords.end());
+        float min_step = std::numeric_limits<float>::infinity();
+
+        for (size_t i = 1; i < coords.size(); ++i) {
+            float diff = coords[i] - coords[i - 1];
+            if (diff > 1e-5f) {
+                min_step = std::min(min_step, diff);
+            }
+        }
+
+        if (!std::isfinite(min_step)) {
+            return 0.05f;  // Fallback to default voxel size
+        }
+        return min_step;
+    };
+
+    size.x += infer_step(0);
+    size.y += infer_step(1);
+    size.z += infer_step(2);
+    return size;
 }
 
 int VoxelFragmentation::GetLongestAxis(const Vector3& size) {

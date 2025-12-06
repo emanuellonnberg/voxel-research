@@ -59,6 +59,9 @@ struct Material {
     // Structural analysis properties (Track 1)
     float spring_constant;        // N/m - stiffness in spring system
     float max_displacement;       // meters - failure threshold
+    float max_support_distance;   // meters - heuristic support distance to ground
+    float min_support_stack;      // meters - required continuous stack height directly below
+    float max_load_ratio;         // Allowed load vs. own weight before redistribution failure
 
     // Physics properties (Track 3)
     float static_friction;        // 0-1 - friction when stationary
@@ -73,6 +76,8 @@ struct Material {
         : name("unknown"), id(0)
         , density(0), compressive_strength(0)
         , spring_constant(0), max_displacement(0)
+        , max_support_distance(0.0f), min_support_stack(0.0f)
+        , max_load_ratio(2.0f)
         , static_friction(0.5f), dynamic_friction(0.4f), restitution(0.3f)
         , color(Color::Gray())
     {}
@@ -82,6 +87,9 @@ struct Material {
         , density(density), compressive_strength(strength)
         , spring_constant(strength * 0.001f)  // Default: proportional to strength
         , max_displacement(0.01f)              // Default: 1cm
+        , max_support_distance(0.0f)
+        , min_support_stack(0.0f)
+        , max_load_ratio(2.0f)
         , static_friction(0.5f), dynamic_friction(0.4f), restitution(0.3f)
         , color(Color::Gray())
     {}

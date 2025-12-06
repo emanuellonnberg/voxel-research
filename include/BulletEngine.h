@@ -93,6 +93,7 @@ public:
     const char* GetEngineName() const override;
     const char* GetEngineVersion() const override;
 
-    // ===== Week 5 Day 28: Access for ImpactDetector =====
+    // Bullet-only accessors
     btDiscreteDynamicsWorld* GetDynamicsWorld() { return dynamics_world; }
+    const btDiscreteDynamicsWorld* GetDynamicsWorld() const { return dynamics_world; }
 };

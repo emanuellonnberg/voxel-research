@@ -134,6 +134,7 @@ add_library(VoxelCore
     $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
     src/physics/VoxelPhysicsIntegration.cpp
     src/physics/RubbleSystem.cpp
+    src/physics/PhysicsProxySimulator.cpp
     $<$<BOOL:${USE_BULLET}>:src/physics/ImpactDetector.cpp>
 )
 
