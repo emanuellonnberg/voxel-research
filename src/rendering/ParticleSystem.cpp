@@ -1,4 +1,5 @@
 #include "ParticleSystem.h"
+#include "JobSystem.h"  // Week 13 Day 43: Parallel particle updates
 #include <cmath>
 #include <algorithm>
 
@@ -32,37 +33,82 @@ void ParticleSystem::Spawn(const Vector3& position, const Vector3& velocity,
 }
 
 void ParticleSystem::Update(float deltaTime) {
-    // Update all particles and remove dead ones
-    auto it = particles.begin();
+    // Week 13 Day 43: Parallel particle updates for large particle counts
+    const bool use_parallel = g_JobSystem &&
+                              g_JobSystem->IsRunning() &&
+                              particles.size() > 500;  // Only parallelize if many particles
 
-    while (it != particles.end()) {
-        // Age the particle
-        it->age += deltaTime;
+    if (use_parallel) {
+        // Step 1: Update particles in parallel
+        g_JobSystem->ParallelFor(static_cast<int>(particles.size()), [&](int i) {
+            Particle& p = particles[i];
 
-        // Remove if dead
-        if (!it->IsAlive()) {
-            it = particles.erase(it);
-            continue;
+            // Age the particle
+            p.age += deltaTime;
+
+            // Only update if alive
+            if (p.IsAlive()) {
+                // Apply gravity
+                p.velocity = p.velocity + gravity * deltaTime;
+
+                // Apply air resistance (simple drag)
+                if (air_resistance > 0.0f) {
+                    float drag = 1.0f - (air_resistance * deltaTime);
+                    drag = std::max(0.0f, drag);
+                    p.velocity = p.velocity * drag;
+                }
+
+                // Update position (Euler integration)
+                p.position = p.position + p.velocity * deltaTime;
+
+                // Update alpha based on fade
+                float fade = p.GetFade();
+                p.color.a = p.color.a * fade;
+            }
+        });
+
+        // Step 2: Remove dead particles (must be serial)
+        auto it = particles.begin();
+        while (it != particles.end()) {
+            if (!it->IsAlive()) {
+                it = particles.erase(it);
+            } else {
+                ++it;
+            }
         }
+    } else {
+        // Serial path: Original implementation
+        auto it = particles.begin();
 
-        // Apply gravity
-        it->velocity = it->velocity + gravity * deltaTime;
+        while (it != particles.end()) {
+            // Age the particle
+            it->age += deltaTime;
 
-        // Apply air resistance (simple drag)
-        if (air_resistance > 0.0f) {
-            float drag = 1.0f - (air_resistance * deltaTime);
-            drag = std::max(0.0f, drag); // Clamp to positive
-            it->velocity = it->velocity * drag;
+            // Remove if dead
+            if (!it->IsAlive()) {
+                it = particles.erase(it);
+                continue;
+            }
+
+            // Apply gravity
+            it->velocity = it->velocity + gravity * deltaTime;
+
+            // Apply air resistance (simple drag)
+            if (air_resistance > 0.0f) {
+                float drag = 1.0f - (air_resistance * deltaTime);
+                drag = std::max(0.0f, drag);
+                it->velocity = it->velocity * drag;
+            }
+
+            // Update position (Euler integration)
+            it->position = it->position + it->velocity * deltaTime;
+
+            // Update alpha based on fade
+            float fade = it->GetFade();
+            it->color.a = it->color.a * fade;
+
+            ++it;
         }
-
-        // Update position (Euler integration)
-        it->position = it->position + it->velocity * deltaTime;
-
-        // Update alpha based on fade
-        float fade = it->GetFade();
-        it->color.a = it->color.a * fade;
-
-        ++it;
     }
 }
 
