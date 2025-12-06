@@ -133,21 +133,26 @@ BenchmarkResult PerformanceBenchmark::BenchmarkDebrisSpawning() {
     g_JobSystem->Shutdown();
     g_JobSystem->Initialize(1);
 
-    VoxelPhysicsIntegration serial_integration(physics, &world);
-    result.serial_time_ms = TimeFunction([&]() {
-        serial_integration.SpawnDebris(analysis_result.failed_clusters);
-    });
-    serial_integration.ClearDebris();
+    {
+        VoxelPhysicsIntegration serial_integration(physics, &world);
+        result.serial_time_ms = TimeFunction([&]() {
+            serial_integration.SpawnDebris(analysis_result.failed_clusters);
+        });
+        // ClearDebris() called automatically by destructor
+    }
 
     // Parallel benchmark (N threads)
     std::cout << "  Running with " << parallel_threads << " threads...\n";
     g_JobSystem->Shutdown();
     g_JobSystem->Initialize(parallel_threads);
 
-    VoxelPhysicsIntegration parallel_integration(physics, &world);
-    result.parallel_time_ms = TimeFunction([&]() {
-        parallel_integration.SpawnDebris(analysis_result.failed_clusters);
-    });
+    {
+        VoxelPhysicsIntegration parallel_integration(physics, &world);
+        result.parallel_time_ms = TimeFunction([&]() {
+            parallel_integration.SpawnDebris(analysis_result.failed_clusters);
+        });
+        // ClearDebris() called automatically by destructor
+    }
 
     result.speedup = result.serial_time_ms / result.parallel_time_ms;
     result.target_met = (result.speedup >= result.target_speedup);
