@@ -187,6 +187,7 @@ if(BUILD_TESTS)
         tests/test_FEMValidation.cpp
         tests/test_JobSystem.cpp  # Week 13 Day 41: Multi-threading
         tests/test_ThreadSafeVector.cpp  # Week 13 Day 44: Thread-safe data structures
+        tests/test_VoxelWorldThreading.cpp  # Week 13 Day 44: VoxelWorld threading tests
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
