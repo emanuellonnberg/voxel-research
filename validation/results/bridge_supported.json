@@ -1,0 +1,13 @@
+{
+  "structure_name": "bridge_supported",
+  "fem_solver": "beam_equation",
+  "should_fail": false,
+  "failed_voxels": [],
+  "max_stress": 381412.80000000005,
+  "failure_stress": 3000000.0,
+  "cantilever_length": 0.45,
+  "method_description": "Beam bending: s=0.4 MPa vs 3.0 MPa limit",
+  "voxel_count": 12,
+  "damaged_count": 0,
+  "expected_failure": false
+}

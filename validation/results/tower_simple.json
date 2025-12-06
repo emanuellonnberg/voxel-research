@@ -1,0 +1,53 @@
+{
+  "structure_name": "tower_simple",
+  "fem_solver": "analytical_connectivity",
+  "should_fail": true,
+  "failed_voxels": [
+    {
+      "position": [
+        0.0,
+        0.05,
+        0.0
+      ],
+      "stress": 0.0,
+      "failure_mode": "unsupported"
+    },
+    {
+      "position": [
+        0.0,
+        0.1,
+        0.0
+      ],
+      "stress": 0.0,
+      "failure_mode": "unsupported"
+    },
+    {
+      "position": [
+        0.0,
+        0.15000000000000002,
+        0.0
+      ],
+      "stress": 0.0,
+      "failure_mode": "unsupported"
+    },
+    {
+      "position": [
+        0.0,
+        0.2,
+        0.0
+      ],
+      "stress": 0.0,
+      "failure_mode": "unsupported"
+    }
+  ],
+  "distance_to_ground": [
+    Infinity,
+    Infinity,
+    Infinity,
+    Infinity
+  ],
+  "method_description": "BFS connectivity check - voxels not connected to ground fail",
+  "voxel_count": 5,
+  "damaged_count": 1,
+  "expected_failure": true
+}
