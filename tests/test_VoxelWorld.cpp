@@ -417,7 +417,7 @@ TEST_F(VoxelWorldTest, GetSurfaceVoxels_Single) {
     Vector3 pos(0, 0, 0);
     world.SetVoxel(pos, Voxel(MaterialDatabase::BRICK));
 
-    auto& surface = world.GetSurfaceVoxels();
+    auto surface = world.GetSurfaceVoxels();
     EXPECT_EQ(surface.size(), 1);
     EXPECT_TRUE(surface.count(pos) > 0);
 }
@@ -433,7 +433,7 @@ TEST_F(VoxelWorldTest, GetSurfaceVoxels_Cube) {
         }
     }
 
-    auto& surface = world.GetSurfaceVoxels();
+    auto surface = world.GetSurfaceVoxels();
 
     // Only center voxel is interior, rest are surface
     // 27 total - 1 interior = 26 surface
@@ -455,13 +455,12 @@ TEST_F(VoxelWorldTest, SurfaceCache_Caching) {
     }
 
     // First call should populate cache
-    auto& surface1 = world.GetSurfaceVoxels();
+    auto surface1 = world.GetSurfaceVoxels();
     size_t count1 = surface1.size();
 
-    // Second call should return same cached result (same address)
-    auto& surface2 = world.GetSurfaceVoxels();
-    EXPECT_EQ(&surface1, &surface2);  // Same reference
-    EXPECT_EQ(count1, surface2.size());
+    // Second call should return same cached result (returns copy for thread safety)
+    auto surface2 = world.GetSurfaceVoxels();
+    EXPECT_EQ(count1, surface2.size());  // Same content
 }
 
 TEST_F(VoxelWorldTest, SurfaceCache_Invalidation) {
@@ -469,13 +468,13 @@ TEST_F(VoxelWorldTest, SurfaceCache_Invalidation) {
     world.SetVoxel(Vector3(0, 0, 0), Voxel(MaterialDatabase::BRICK));
     world.SetVoxel(Vector3(voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
 
-    auto& surface1 = world.GetSurfaceVoxels();
+    auto surface1 = world.GetSurfaceVoxels();
     EXPECT_EQ(surface1.size(), 2);  // Both are surface
 
     // Add voxel - should invalidate cache
     world.SetVoxel(Vector3(2 * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
 
-    auto& surface2 = world.GetSurfaceVoxels();
+    auto surface2 = world.GetSurfaceVoxels();
     EXPECT_EQ(surface2.size(), 3);  // All three are surface
 }
 
@@ -485,13 +484,13 @@ TEST_F(VoxelWorldTest, SurfaceCache_InvalidationOnRemove) {
     world.SetVoxel(Vector3(voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
     world.SetVoxel(Vector3(2 * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
 
-    auto& surface1 = world.GetSurfaceVoxels();
+    auto surface1 = world.GetSurfaceVoxels();
     EXPECT_EQ(surface1.size(), 3);  // All surface
 
     // Remove middle voxel
     world.RemoveVoxel(Vector3(voxel_size, 0, 0));
 
-    auto& surface2 = world.GetSurfaceVoxels();
+    auto surface2 = world.GetSurfaceVoxels();
     EXPECT_EQ(surface2.size(), 2);  // Two remaining voxels are surface
 }
 
@@ -501,13 +500,13 @@ TEST_F(VoxelWorldTest, SurfaceCache_InvalidationOnClear) {
         world.SetVoxel(Vector3(i * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
     }
 
-    auto& surface1 = world.GetSurfaceVoxels();
+    auto surface1 = world.GetSurfaceVoxels();
     EXPECT_GT(surface1.size(), 0);
 
     // Clear world
     world.Clear();
 
-    auto& surface2 = world.GetSurfaceVoxels();
+    auto surface2 = world.GetSurfaceVoxels();
     EXPECT_EQ(surface2.size(), 0);  // No voxels = no surface
 }
 
@@ -524,13 +523,13 @@ TEST_F(VoxelWorldTest, SurfaceDetection_Performance) {
 
     // First call (cache miss) - populate cache
     auto start1 = std::chrono::high_resolution_clock::now();
-    auto& surface1 = world.GetSurfaceVoxels();
+    auto surface1 = world.GetSurfaceVoxels();
     auto end1 = std::chrono::high_resolution_clock::now();
     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
 
     // Second call (cache hit) - should be much faster
     auto start2 = std::chrono::high_resolution_clock::now();
-    auto& surface2 = world.GetSurfaceVoxels();
+    auto surface2 = world.GetSurfaceVoxels();
     auto end2 = std::chrono::high_resolution_clock::now();
     auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
 

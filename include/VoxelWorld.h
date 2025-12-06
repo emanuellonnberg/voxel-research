@@ -59,7 +59,7 @@ public:
                                  float max_distance) const;
 
     // Surface detection (cached for performance)
-    const std::unordered_set<Vector3, Vector3::Hash>& GetSurfaceVoxels();
+    std::unordered_set<Vector3, Vector3::Hash> GetSurfaceVoxels() const;  // Returns copy for thread safety
     bool IsSurfaceVoxel(const Vector3& position) const;
     void InvalidateSurfaceCache();
 
@@ -91,7 +91,7 @@ private:
     mutable std::shared_mutex surface_mutex;  // Protects surface_cache, surface_cache_dirty
 
     // Helper methods
-    void UpdateSurfaceCache() const;
+    void UpdateSurfaceCacheUnsafe() const;  // Must be called with both locks held
     void InvalidateSurfaceAt(const Vector3& position);
 
     // Helper for neighbor offsets

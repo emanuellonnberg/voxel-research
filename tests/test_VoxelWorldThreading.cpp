@@ -224,7 +224,7 @@ TEST_F(VoxelWorldThreadingTest, ConcurrentSurfaceCacheAccess) {
     for (int t = 0; t < 4; t++) {
         readers.emplace_back([&]() {
             while (!stop_flag.load()) {
-                const auto& surface = world.GetSurfaceVoxels();
+                auto surface = world.GetSurfaceVoxels();
                 if (surface.size() > 0) {
                     surface_read_count++;
                 }

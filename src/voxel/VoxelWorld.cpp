@@ -88,6 +88,8 @@ void VoxelWorld::RemoveVoxel(const Vector3& position) {
 }
 
 void VoxelWorld::Clear() {
+    // IMPORTANT: Always acquire locks in consistent order: voxel_mutex THEN surface_mutex
+    // to avoid deadlock (detected by ThreadSanitizer)
     std::unique_lock<std::shared_mutex> voxel_lock(voxel_mutex);
     std::unique_lock<std::shared_mutex> surface_lock(surface_mutex);
 
@@ -322,23 +324,26 @@ bool VoxelWorld::IsSurfaceVoxel(const Vector3& position) const {
     return false;  // Completely surrounded by solid voxels
 }
 
-const std::unordered_set<Vector3, Vector3::Hash>& VoxelWorld::GetSurfaceVoxels() {
+std::unordered_set<Vector3, Vector3::Hash> VoxelWorld::GetSurfaceVoxels() const {
     // Double-checked locking pattern for lazy cache update
     {
         std::shared_lock<std::shared_mutex> lock(surface_mutex);
         if (!surface_cache_dirty) {
-            return surface_cache;
+            return surface_cache;  // Return copy while holding lock
         }
     }
 
     // Cache is dirty - need to update
-    std::unique_lock<std::shared_mutex> lock(surface_mutex);
-    // Check again in case another thread updated while we waited for unique lock
+    // IMPORTANT: Acquire voxel_mutex FIRST, then surface_mutex (consistent lock order)
+    std::shared_lock<std::shared_mutex> voxel_lock(voxel_mutex);
+    std::unique_lock<std::shared_mutex> surface_lock(surface_mutex);
+
+    // Check again in case another thread updated while we waited for locks
     if (surface_cache_dirty) {
-        UpdateSurfaceCache();
+        UpdateSurfaceCacheUnsafe();  // Called with both locks already held
         surface_cache_dirty = false;
     }
-    return surface_cache;
+    return surface_cache;  // Return copy while holding lock
 }
 
 void VoxelWorld::InvalidateSurfaceCache() {
@@ -346,10 +351,9 @@ void VoxelWorld::InvalidateSurfaceCache() {
     surface_cache_dirty = true;
 }
 
-void VoxelWorld::UpdateSurfaceCache() const {
-    // Called from GetSurfaceVoxels() which already holds surface_mutex
-    // Need voxel_mutex to read voxels
-    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+void VoxelWorld::UpdateSurfaceCacheUnsafe() const {
+    // Called from GetSurfaceVoxels() which already holds BOTH voxel_mutex and surface_mutex
+    // "Unsafe" means caller must hold locks - don't call this directly
 
     surface_cache.clear();
 
