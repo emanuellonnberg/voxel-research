@@ -137,6 +137,9 @@ add_library(VoxelCore
     src/physics/RubbleSystem.cpp
     src/physics/PhysicsProxySimulator.cpp
     $<$<BOOL:${USE_BULLET}>:src/physics/ImpactDetector.cpp>
+
+    # Testing/Benchmarking (Week 13 Day 45)
+    src/testing/PerformanceBenchmark.cpp
 )
 
 target_include_directories(VoxelCore PUBLIC
@@ -255,6 +258,24 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(AnalyzerComparison VoxelCore)
 
+    # Week 13 Day 45: Multi-threading benchmarks
+    add_executable(Week13Benchmark
+        examples/week13_benchmark.cpp
+    )
+    target_link_libraries(Week13Benchmark VoxelCore)
+
+    # Week 13: Simple JobSystem test
+    add_executable(TestJobSystemSimple
+        examples/test_jobsystem_simple.cpp
+    )
+    target_link_libraries(TestJobSystemSimple VoxelCore)
+
+    # Week 13: JobSystem re-initialization test
+    add_executable(TestJobSystemReinit
+        examples/test_jobsystem_reinit.cpp
+    )
+    target_link_libraries(TestJobSystemReinit VoxelCore)
+
     # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
@@ -263,6 +284,7 @@ if(BUILD_EXAMPLES)
         target_compile_definitions(ScenarioTests PRIVATE USE_BULLET)
         target_compile_definitions(ShowcaseDemo PRIVATE USE_BULLET)
         target_compile_definitions(AnalyzerComparison PRIVATE USE_BULLET)
+        target_compile_definitions(Week13Benchmark PRIVATE USE_BULLET)
     endif()
 endif()
 
