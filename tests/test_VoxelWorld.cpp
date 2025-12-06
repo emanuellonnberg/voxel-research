@@ -6,11 +6,12 @@
 // Test fixture for VoxelWorld tests
 class VoxelWorldTest : public ::testing::Test {
 protected:
-    VoxelWorld world;
     const float voxel_size = 0.05f;
+    VoxelWorld world{voxel_size};  // Initialize directly (VoxelWorld not copyable due to mutexes)
 
     void SetUp() override {
-        world = VoxelWorld(voxel_size);
+        // World is already initialized with voxel_size
+        world.Clear();  // Clear for each test
     }
 };
 

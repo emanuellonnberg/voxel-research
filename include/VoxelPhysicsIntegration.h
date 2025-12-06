@@ -55,8 +55,19 @@ public:
      * - Position: cluster center of mass
      * - Mass: based on voxel count (voxel_density kg/m³)
      * - Shape: convex hull from voxel positions
+     *
+     * Week 13 Day 43: Automatically uses parallel processing if JobSystem is available
      */
     int SpawnDebris(const std::vector<VoxelCluster>& clusters);
+
+    /**
+     * Spawn debris using serial implementation (for testing/fallback)
+     * @param clusters Failed clusters from StructuralAnalyzer
+     * @return Number of new debris bodies spawned
+     *
+     * Week 13 Day 43: Serial version for performance comparison
+     */
+    int SpawnDebrisSerial(const std::vector<VoxelCluster>& clusters);
 
     /**
      * Update physics simulation for all debris

@@ -2,6 +2,7 @@
 #include "StructuralAnalyzer.h"
 #include "VoxelUtils.h"
 #include "VoxelCluster.h"
+#include "JobSystem.h"  // Week 13 Day 42: Parallel structural analysis
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -215,15 +216,47 @@ void MaxFlowStructuralAnalyzer::ConnectSourceToVoxels() {
     // Source → Voxel edges with capacity = cumulative mass above + own mass
     // This allows load to flow from top voxels through bottom voxels to ground
     // Each voxel must support its own weight plus all weight above it
-    for (size_t i = 2; i < nodes.size(); ++i) {  // Skip source(0) and sink(1)
-        FlowNode* voxel = nodes[i];
-        if (voxel->type != FlowNode::VOXEL) continue;
 
-        // Calculate total mass supported by this voxel (own + above)
-        float cumulative_mass = CalculateCumulativeMass(voxel->position);
-        float load = cumulative_mass * GRAVITY;
+    const size_t num_nodes = nodes.size();
 
-        AddFlowEdge(source_id, voxel->id, load);
+    // Check if we should use parallel computation
+    const bool use_parallel = params.use_parallel_construction &&
+                              g_JobSystem &&
+                              g_JobSystem->IsRunning() &&
+                              (num_nodes - 2) > 100;  // Only parallelize if enough nodes
+
+    if (use_parallel) {
+        // Parallel path: Pre-compute all cumulative masses
+        std::vector<float> cumulative_masses(num_nodes, 0.0f);
+
+        // Compute masses in parallel (most expensive operation)
+        g_JobSystem->ParallelFor(static_cast<int>(num_nodes - 2), [&](int idx) {
+            size_t i = idx + 2;  // Skip source(0) and sink(1)
+            FlowNode* voxel = nodes[i];
+            if (voxel->type == FlowNode::VOXEL) {
+                cumulative_masses[i] = CalculateCumulativeMass(voxel->position);
+            }
+        });
+
+        // Add edges sequentially (fast, no contention)
+        for (size_t i = 2; i < num_nodes; ++i) {
+            FlowNode* voxel = nodes[i];
+            if (voxel->type != FlowNode::VOXEL) continue;
+
+            float load = cumulative_masses[i] * GRAVITY;
+            AddFlowEdge(source_id, voxel->id, load);
+        }
+    } else {
+        // Serial path: Original implementation
+        for (size_t i = 2; i < num_nodes; ++i) {
+            FlowNode* voxel = nodes[i];
+            if (voxel->type != FlowNode::VOXEL) continue;
+
+            float cumulative_mass = CalculateCumulativeMass(voxel->position);
+            float load = cumulative_mass * GRAVITY;
+
+            AddFlowEdge(source_id, voxel->id, load);
+        }
     }
 }
 

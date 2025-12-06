@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <vector>
 #include <memory>
+#include <shared_mutex>
 
 /**
  * VoxelWorld - Sparse voxel storage and queries
@@ -18,11 +19,16 @@
  * - Voxel size: 5cm (0.05m) - balances detail vs. performance
  * - Sparse storage: Only solid voxels stored (air is implicit)
  * - Hash-based: O(1) average lookup time
+ * - Thread-safe: Uses std::shared_mutex for concurrent reads/writes
  *
  * Performance:
  * - Can handle 100K+ voxels efficiently
  * - Lookups: O(1) average
  * - Neighbor queries: O(1) per neighbor
+ * - Concurrent reads: Multiple threads can read simultaneously
+ * - Writes: Exclusive lock ensures thread safety
+ *
+ * Week 13 Day 44: Thread-Safe Data Structures
  */
 class VoxelWorld {
 public:
@@ -36,7 +42,7 @@ public:
 
     // Bulk operations
     void Clear();
-    size_t GetVoxelCount() const { return voxels.size(); }
+    size_t GetVoxelCount() const;
     std::vector<Vector3> GetAllVoxelPositions() const;
 
     // Neighbor queries
@@ -76,6 +82,11 @@ private:
 
     // Spatial hash for accelerating spatial queries (optional)
     std::unique_ptr<SpatialHash> spatial_hash;
+
+    // Week 13 Day 44: Thread synchronization
+    // Reader-writer locks allow multiple concurrent readers or one exclusive writer
+    mutable std::shared_mutex voxel_mutex;    // Protects voxels, spatial_hash
+    mutable std::shared_mutex surface_mutex;  // Protects surface_cache, surface_cache_dirty
 
     // Helper methods
     void UpdateSurfaceCache() const;
