@@ -4,10 +4,12 @@
 #include "Material.h"
 #include "VoxelWorld.h"
 #include "VoxelCluster.h"
+#include "PhysicsProxySimulator.h"
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <limits>
 
 /**
  * SpringNode - Represents a voxel in the structural spring system
@@ -23,6 +25,8 @@ struct SpringNode {
     float displacement;         // Vertical displacement (meters, negative = sag down)
     float velocity;             // Rate of displacement change
     float mass_supported;       // Total mass this node supports (kg)
+    float redistributed_load;   // Mass after redistribution (kg)
+    float load_capacity;        // Maximum allowable supported mass
 
     // Connectivity
     std::vector<SpringNode*> neighbors;
@@ -31,6 +35,8 @@ struct SpringNode {
     // Failure tracking
     bool has_failed;            // Exceeded material limits
     bool is_disconnected;       // No path to ground
+    float ground_path_length;   // Shortest path distance to ground anchors
+    float vertical_stack_depth; // Continuous voxel height directly beneath
 
     // For debugging
     int id;
@@ -41,9 +47,13 @@ struct SpringNode {
         , displacement(0.0f)
         , velocity(0.0f)
         , mass_supported(0.0f)
+        , redistributed_load(0.0f)
+        , load_capacity(0.0f)
         , is_ground_anchor(false)
         , has_failed(false)
         , is_disconnected(false)
+        , ground_path_length(std::numeric_limits<float>::infinity())
+        , vertical_stack_depth(0.0f)
         , id(-1)
     {}
 
@@ -53,10 +63,35 @@ struct SpringNode {
         , displacement(0.0f)
         , velocity(0.0f)
         , mass_supported(0.0f)
+        , redistributed_load(0.0f)
+        , load_capacity(0.0f)
         , is_ground_anchor(is_anchor)
         , has_failed(false)
         , is_disconnected(false)
+        , ground_path_length(std::numeric_limits<float>::infinity())
+        , vertical_stack_depth(0.0f)
         , id(node_id)
+    {}
+};
+
+/**
+ * LoadRedistributionStats - Telemetry for redistribution pass
+ */
+struct LoadRedistributionStats {
+    bool enabled;
+    int iterations;
+    int nodes_over_capacity;
+    int transfers;
+    float total_excess_load;
+    float load_dumped_to_ground;
+
+    LoadRedistributionStats()
+        : enabled(false)
+        , iterations(0)
+        , nodes_over_capacity(0)
+        , transfers(0)
+        , total_excess_load(0.0f)
+        , load_dumped_to_ground(0.0f)
     {}
 };
 
@@ -71,6 +106,8 @@ struct AnalysisResult {
     std::vector<VoxelCluster> failed_clusters;  // Clusters to remove/simulate
     int num_failed_nodes;                       // Total nodes that failed
     int num_disconnected_nodes;                 // Nodes with no ground path
+    bool proxy_mode_used;                       // True when physics proxy handled failures
+    PhysicsProxyResult proxy_result;            // Telemetry from proxy simulator
 
     // Performance metrics
     float calculation_time_ms;
@@ -89,10 +126,15 @@ struct AnalysisResult {
     // Debug info
     std::string debug_info;
 
+    // Load redistribution telemetry (only populated for that mode)
+    LoadRedistributionStats load_stats;
+
     AnalysisResult()
         : structure_failed(false)
         , num_failed_nodes(0)
         , num_disconnected_nodes(0)
+        , proxy_mode_used(false)
+        , proxy_result()
         , calculation_time_ms(0.0f)
         , iterations_used(0)
         , converged(false)
@@ -205,6 +247,14 @@ public:
      */
     bool CheckNumericalStability() const;
 
+    // Analysis strategy selection
+    enum class StructuralMode {
+        HeuristicSupport,     // Current displacement/ground-connectivity heuristics
+        StackDepth,           // Future: require per-material support stacks
+        LoadRedistribution,   // Future: iterative load rebalancing
+        PhysicsProxy          // Future: Bullet-based proxy simulation
+    };
+
     // Tunable parameters
     struct Parameters {
         float timestep;                 // Simulation timestep (default 0.01s)
@@ -216,6 +266,12 @@ public:
         float influence_radius;         // Radius around damage to analyze (Day 16, default 5.0m)
         bool use_parallel_mass_calc;    // Use multi-threading for mass calculation (Day 16)
         bool use_early_termination;     // Enable early termination optimizations (Day 16)
+        StructuralMode analysis_mode;   // Selects structural failure strategy
+        int load_redistribution_iterations;   // Max redistribution passes
+        float load_redistribution_tolerance;  // Redistribution epsilon
+        float load_capacity_scale;            // Global multiplier on per-material capacity
+        bool allow_ground_absorption;         // Allow nodes to dump load directly to ground
+        PhysicsProxySettings proxy_settings;  // Settings for physics proxy mode
 
         Parameters()
             : timestep(0.01f)
@@ -227,6 +283,12 @@ public:
             , influence_radius(5.0f)
             , use_parallel_mass_calc(true)
             , use_early_termination(false)  // Day 16: Disabled by default (too aggressive)
+            , analysis_mode(StructuralMode::HeuristicSupport)
+            , load_redistribution_iterations(8)
+            , load_redistribution_tolerance(1e-4f)
+            , load_capacity_scale(1.0f)
+            , allow_ground_absorption(true)
+            , proxy_settings()
         {}
     };
 
@@ -236,6 +298,8 @@ private:
     // Analysis pipeline
     void BuildNodeGraph(const std::vector<Vector3>& damaged_positions);
     void CalculateMassSupported();
+    void RedistributeLoads();
+    void CalculateStackDepth();
     bool SolveDisplacements();
     std::vector<SpringNode*> DetectFailures();
     std::vector<VoxelCluster> FindFailedClusters(const std::vector<SpringNode*>& failed_nodes);
@@ -245,6 +309,9 @@ private:
     float CalculateSpringForce(const SpringNode* node) const;
     void UpdateDisplacement(SpringNode* node, float dt);
     bool CheckConvergence() const;
+    float CalculateStableTimestep() const;
+    const char* ModeToString(StructuralMode mode) const;
+    StructuralMode StringToMode(const std::string& mode) const;
 
     // Day 14: Ground connectivity (flood-fill from ground anchors)
     std::vector<SpringNode*> FindFloatingNodes();
@@ -253,6 +320,7 @@ private:
     VoxelWorld* world;
     std::vector<SpringNode*> nodes;
     std::unordered_map<Vector3, SpringNode*, Vector3::Hash> node_map;
+    LoadRedistributionStats load_stats;
 
     // Cache for mass calculation (Day 11)
     std::unordered_map<Vector3, float, Vector3::Hash> mass_cache;

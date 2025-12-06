@@ -30,6 +30,9 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         air.compressive_strength = 0.0f;
         air.spring_constant = 0.0f;
         air.max_displacement = 0.0f;
+        air.max_support_distance = 0.0f;
+        air.min_support_stack = 0.0f;
+        air.max_load_ratio = 0.0f;
         air.color = Color(0, 0, 0);
         RegisterMaterial(air);
     }
@@ -47,7 +50,10 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         wood.static_friction = 0.6f;
         wood.dynamic_friction = 0.5f;
         wood.restitution = 0.4f;                  // Slightly bouncy
-        wood.color = Color(0.72f, 0.5f, 0.28f);    // Warm brown
+        wood.max_support_distance = 0.5f;         // Supports up to ~0.5m from ground
+        wood.min_support_stack = 0.02f;           // Needs at least a thin support stack
+        wood.max_load_ratio = 1.5f;               // Can carry ~1.5x its own weight
+        wood.color = Color(0.72f, 0.5f, 0.28f);   // Warm brown
         RegisterMaterial(wood);
     }
 
@@ -64,7 +70,10 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         brick.static_friction = 0.8f;
         brick.dynamic_friction = 0.7f;
         brick.restitution = 0.2f;                 // Not very bouncy
-        brick.color = Color(0.85f, 0.23f, 0.18f);   // Vibrant brick red
+        brick.max_support_distance = 2.0f;        // Can span moderate distances
+        brick.min_support_stack = 0.05f;          // Needs at least 1 voxel of support
+        brick.max_load_ratio = 2.5f;
+        brick.color = Color(0.85f, 0.23f, 0.18f); // Vibrant brick red
         RegisterMaterial(brick);
     }
 
@@ -81,6 +90,9 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         concrete.static_friction = 0.9f;
         concrete.dynamic_friction = 0.8f;
         concrete.restitution = 0.1f;              // Very little bounce
+        concrete.max_support_distance = 3.0f;
+        concrete.min_support_stack = 0.1f;        // Requires multiple voxels of support
+        concrete.max_load_ratio = 3.0f;
         concrete.color = Color(0.75f, 0.77f, 0.80f); // Light gray
         RegisterMaterial(concrete);
     }
@@ -98,7 +110,10 @@ void MaterialDatabase::InitializeDefaultMaterials() {
         steel.static_friction = 0.7f;
         steel.dynamic_friction = 0.6f;
         steel.restitution = 0.5f;                 // Moderately bouncy
-        steel.color = Color(0.6f, 0.72f, 0.85f);    // Cool metallic
+        steel.max_support_distance = 5.0f;
+        steel.min_support_stack = 0.0f;           // Steel beams can self-span
+        steel.max_load_ratio = 5.0f;
+        steel.color = Color(0.6f, 0.72f, 0.85f);  // Cool metallic
         RegisterMaterial(steel);
     }
 }

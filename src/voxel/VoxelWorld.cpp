@@ -3,9 +3,9 @@
 #include <cmath>
 
 VoxelWorld::VoxelWorld(float voxel_size)
-    : voxel_size(voxel_size), surface_cache_dirty(true)
-{
-}
+    : voxel_size(voxel_size)
+    , surface_cache_dirty(true)
+    , edit_version(0) {}
 
 bool VoxelWorld::HasVoxel(const Vector3& position) const {
     Vector3 snapped = SnapToGrid(position);
@@ -26,17 +26,21 @@ void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
     Vector3 snapped = SnapToGrid(position);
 
     bool was_solid = HasVoxel(snapped);
+    bool changed = false;
 
     if (voxel.IsSolid()) {
         voxels[snapped] = voxel;
+        changed = true;
 
         // Update spatial hash if enabled (only insert if newly solid)
         if (spatial_hash && !was_solid) {
             spatial_hash->Insert(snapped);
+            changed = true;
         }
     } else {
         // If setting to air, remove from map (sparse storage)
-        voxels.erase(snapped);
+        auto erased = voxels.erase(snapped);
+        changed = changed || erased > 0;
 
         // Remove from spatial hash if enabled
         if (spatial_hash && was_solid) {
@@ -44,29 +48,36 @@ void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
         }
     }
 
-    // Invalidate surface cache for this voxel and neighbors
-    InvalidateSurfaceAt(snapped);
+    if (changed) {
+        ++edit_version;
+        // Invalidate surface cache for this voxel and neighbors
+        InvalidateSurfaceAt(snapped);
+    }
 }
 
 void VoxelWorld::RemoveVoxel(const Vector3& position) {
     Vector3 snapped = SnapToGrid(position);
 
     bool was_solid = HasVoxel(snapped);
-    voxels.erase(snapped);
+    size_t erased = voxels.erase(snapped);
 
     // Remove from spatial hash if enabled
     if (spatial_hash && was_solid) {
         spatial_hash->Remove(snapped);
     }
 
-    // Invalidate surface cache for this voxel and neighbors
-    InvalidateSurfaceAt(snapped);
+    if (erased > 0) {
+        ++edit_version;
+        // Invalidate surface cache for this voxel and neighbors
+        InvalidateSurfaceAt(snapped);
+    }
 }
 
 void VoxelWorld::Clear() {
     voxels.clear();
     surface_cache.clear();
     surface_cache_dirty = true;
+    ++edit_version;
 
     // Clear spatial hash if enabled
     if (spatial_hash) {

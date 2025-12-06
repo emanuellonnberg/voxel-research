@@ -1,0 +1,29 @@
+{
+  "structure_name": "multi_span_bridge",
+  "fem_solver": "simplified_fem_connectivity",
+  "should_fail": true,
+  "failed_voxels": [
+    {
+      "position": [
+        0.30000000000000004,
+        0.1,
+        0.0
+      ],
+      "stress": 0.0,
+      "failure_mode": "unsupported"
+    },
+    {
+      "position": [
+        0.4,
+        0.1,
+        0.0
+      ],
+      "stress": 0.0,
+      "failure_mode": "unsupported"
+    }
+  ],
+  "method_description": "Connectivity analysis detected unsupported voxels",
+  "voxel_count": 15,
+  "damaged_count": 7,
+  "expected_failure": true
+}

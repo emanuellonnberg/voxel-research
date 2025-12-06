@@ -23,6 +23,8 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
     , impact_detector(nullptr)          // Week 5 Day 28: Disabled by default
     , debris_collides_debris(true)      // Week 5 Day 29: Enabled by default
     , simulation_time(0.0f)             // Week 5 Day 29: Start at 0
+    , settled_cleanup_delay(1.0f)
+    , settled_visual_lifetime(0.0f)
 {
     if (!physics_engine) {
         throw std::runtime_error("VoxelPhysicsIntegration: physics_engine cannot be null");
@@ -30,11 +32,23 @@ VoxelPhysicsIntegration::VoxelPhysicsIntegration(IPhysicsEngine* engine, VoxelWo
 
     std::cout << "[VoxelPhysicsIntegration] Initialized with "
               << physics_engine->GetEngineName() << "\n";
+
+    CreateGroundPlane();
 }
 
 VoxelPhysicsIntegration::~VoxelPhysicsIntegration() {
     DisableImpactDetection(); // Week 5 Day 28: Cleanup impact detector
     ClearDebris();
+    if (physics_engine) {
+        if (ground_body) {
+            physics_engine->DestroyRigidBody(ground_body);
+            ground_body = nullptr;
+        }
+        if (ground_shape) {
+            physics_engine->DestroyShape(ground_shape);
+            ground_shape = nullptr;
+        }
+    }
     std::cout << "[VoxelPhysicsIntegration] Shutdown complete\n";
 }
 
@@ -135,13 +149,15 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
 
             // Week 5 Day 29: Apply collision filtering (Bullet only)
 #ifdef USE_BULLET
-            btRigidBody* bt_body = static_cast<btRigidBody*>(body);
-            if (bt_body && bt_body->getBroadphaseHandle()) {
-                short debris_mask = debris_collides_debris ?
-                    (COL_GROUND | COL_DEBRIS | COL_UNITS) :
-                    (COL_GROUND | COL_UNITS);
-                bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
-                bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+            if (dynamic_cast<BulletEngine*>(physics_engine)) {
+                btRigidBody* bt_body = static_cast<btRigidBody*>(body);
+                if (bt_body && bt_body->getBroadphaseHandle()) {
+                    short debris_mask = debris_collides_debris ?
+                        (COL_GROUND | COL_DEBRIS | COL_UNITS) :
+                        (COL_GROUND | COL_UNITS);
+                    bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
+                    bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+                }
             }
 #endif
 
@@ -181,6 +197,12 @@ void VoxelPhysicsIntegration::Step(float deltaTime) {
 
     // Week 5 Day 26: Update debris settling states
     UpdateDebrisStates(deltaTime);
+    int converted = CleanupSettledDebris();
+    if (converted > 0) {
+        std::cout << "[VoxelPhysicsIntegration] Converted " << converted
+                  << " debris to static visuals (total static: " << settled_visuals.size() << ")\n";
+    }
+    RemoveExpiredSettledVisuals();
 
 #ifdef USE_BULLET
     // Week 5 Day 28: Detect impacts and spawn particles
@@ -207,6 +229,7 @@ void VoxelPhysicsIntegration::ClearDebris() {
 
     debris_bodies.clear();
     cluster_to_debris.clear();
+    settled_visuals.clear();
 
     std::cout << "[VoxelPhysicsIntegration] Cleared all debris\n";
 }
@@ -269,6 +292,14 @@ void VoxelPhysicsIntegration::SetDebrisMaterial(float friction_val, float restit
     restitution = restitution_val;
 }
 
+void VoxelPhysicsIntegration::SetSettledCleanupDelay(float seconds) {
+    settled_cleanup_delay = std::max(0.0f, seconds);
+}
+
+void VoxelPhysicsIntegration::SetSettledVisualLifetime(float seconds) {
+    settled_visual_lifetime = seconds;
+}
+
 // ===== Queries =====
 
 int VoxelPhysicsIntegration::GetDebrisCount() const {
@@ -284,8 +315,8 @@ void VoxelPhysicsIntegration::GetDebrisRenderData(std::vector<Transform>& out_tr
         return;
     }
 
-    out_transforms.reserve(debris_bodies.size());
-    out_material_ids.reserve(debris_bodies.size());
+    out_transforms.reserve(debris_bodies.size() + settled_visuals.size());
+    out_material_ids.reserve(debris_bodies.size() + settled_visuals.size());
 
     for (const auto& debris : debris_bodies) {
         if (!debris.body) {
@@ -293,6 +324,11 @@ void VoxelPhysicsIntegration::GetDebrisRenderData(std::vector<Transform>& out_tr
         }
         out_transforms.push_back(physics_engine->GetBodyTransform(debris.body));
         out_material_ids.push_back(debris.material_id);
+    }
+
+    for (const auto& settled : settled_visuals) {
+        out_transforms.push_back(settled.transform);
+        out_material_ids.push_back(settled.material_id);
     }
 }
 
@@ -554,6 +590,96 @@ void VoxelPhysicsIntegration::UpdateDebrisStates(float deltaTime) {
     }
 }
 
+int VoxelPhysicsIntegration::CleanupSettledDebris() {
+    if (!physics_engine) {
+        return 0;
+    }
+
+    int converted = 0;
+    for (size_t i = 0; i < debris_bodies.size();) {
+        auto& debris = debris_bodies[i];
+        bool ready = debris.state == DebrisState::SETTLED &&
+                     (simulation_time - debris.spawn_time) >= settled_cleanup_delay;
+        if (!ready) {
+            ++i;
+            continue;
+        }
+
+        SettledDebrisVisual visual;
+        visual.transform = physics_engine->GetBodyTransform(debris.body);
+        visual.material_id = debris.material_id;
+        visual.cluster_id = debris.cluster_id;
+        visual.settled_time = simulation_time;
+        settled_visuals.push_back(visual);
+
+        physics_engine->DestroyRigidBody(debris.body);
+        physics_engine->DestroyShape(debris.shape);
+        cluster_to_debris.erase(debris.cluster_id);
+
+        if (i < debris_bodies.size() - 1) {
+            debris_bodies[i] = debris_bodies.back();
+            cluster_to_debris[debris_bodies[i].cluster_id] = i;
+        }
+        debris_bodies.pop_back();
+        ++converted;
+    }
+    return converted;
+}
+
+void VoxelPhysicsIntegration::RemoveExpiredSettledVisuals() {
+    if (settled_visual_lifetime <= 0.0f) {
+        return;
+    }
+
+    size_t before = settled_visuals.size();
+    settled_visuals.erase(
+        std::remove_if(settled_visuals.begin(), settled_visuals.end(),
+                       [&](const SettledDebrisVisual& visual) {
+                           return (simulation_time - visual.settled_time) >= settled_visual_lifetime;
+                       }),
+        settled_visuals.end());
+
+    size_t removed = before - settled_visuals.size();
+    if (removed > 0) {
+        std::cout << "[VoxelPhysicsIntegration] Removed " << removed
+                  << " expired static debris visuals\n";
+    }
+}
+
+void VoxelPhysicsIntegration::CreateGroundPlane() {
+    if (!physics_engine || ground_body) {
+        return;
+    }
+
+    BoxShapeDesc ground_shape_desc;
+    ground_shape_desc.half_extents = Vector3(500.0f, 0.5f, 500.0f);
+    ground_shape = physics_engine->CreateBoxShape(ground_shape_desc);
+    if (!ground_shape) {
+        std::cerr << "[VoxelPhysicsIntegration] Failed to create ground shape\n";
+        return;
+    }
+
+    RigidBodyDesc ground_desc;
+    ground_desc.transform.position = Vector3(0.0f, -0.5f, 0.0f);
+    ground_desc.mass = 0.0f;
+    ground_desc.linear_damping = 0.0f;
+    ground_desc.angular_damping = 0.0f;
+    ground_desc.friction = friction;
+    ground_desc.restitution = restitution * 0.5f;  // dampened bounce
+    ground_desc.kinematic = true;
+
+    ground_body = physics_engine->CreateRigidBody(ground_desc);
+    if (!ground_body) {
+        std::cerr << "[VoxelPhysicsIntegration] Failed to create ground body\n";
+        physics_engine->DestroyShape(ground_shape);
+        ground_shape = nullptr;
+        return;
+    }
+
+    physics_engine->AttachShape(ground_body, ground_shape);
+    std::cout << "[VoxelPhysicsIntegration] Ground plane created (size 1000x1000)\n";
+}
+
 int VoxelPhysicsIntegration::ConvertSettledToStatic() {
     if (!physics_engine) {
         return 0;
@@ -754,26 +880,31 @@ int VoxelPhysicsIntegration::RemoveDebrisBeyondDistance(const Vector3& position,
     while (it != debris_bodies.end()) {
         // Get debris position (use Bullet directly when available)
         Vector3 debris_pos;
+        bool used_bullet_path = false;
 
 #ifdef USE_BULLET
-        btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
-        if (bt_body) {
-            btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
-            debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
-        } else {
-            ++it;
-            continue;
+        if (dynamic_cast<BulletEngine*>(physics_engine)) {
+            used_bullet_path = true;
+            btRigidBody* bt_body = static_cast<btRigidBody*>(it->body);
+            if (bt_body) {
+                btVector3 bt_pos = bt_body->getWorldTransform().getOrigin();
+                debris_pos = Vector3(bt_pos.x(), bt_pos.y(), bt_pos.z());
+            } else {
+                ++it;
+                continue;
+            }
         }
-#else
-        // For non-Bullet engines, use velocity as proxy (simplified)
-        Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
-        if (vel.Length() < 0.01f) {
-            // Assume settled debris is at spawn position (simplified)
-            ++it;
-            continue;
-        }
-        debris_pos = Vector3::Zero(); // Fallback
 #endif
+        if (!used_bullet_path) {
+            // For non-Bullet engines (or Mock), use velocity as proxy (simplified)
+            Vector3 vel = physics_engine->GetBodyLinearVelocity(it->body);
+            if (vel.Length() < 0.01f) {
+                // Assume settled debris is at spawn position (simplified)
+                ++it;
+                continue;
+            }
+            debris_pos = Vector3::Zero(); // Fallback
+        }
 
         Vector3 delta = debris_pos - position;
         float distance_sq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;

@@ -1,0 +1,10 @@
+{
+  "structure_name": "heavy_load",
+  "fem_solver": "compression_stress",
+  "should_fail": false,
+  "failed_voxels": [],
+  "method_description": "Axial compression: s = F/A vs compressive strength",
+  "voxel_count": 21,
+  "damaged_count": 0,
+  "expected_failure": false
+}

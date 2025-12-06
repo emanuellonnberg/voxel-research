@@ -65,10 +65,12 @@ public:
     // Utility
     float GetVoxelSize() const { return voxel_size; }
     Vector3 SnapToGrid(const Vector3& position) const;
+    size_t GetEditVersion() const { return edit_version; }
 
 private:
     float voxel_size;  // Size of each voxel (default 0.05m = 5cm)
     std::unordered_map<Vector3, Voxel, Vector3::Hash> voxels;
+    size_t edit_version;
 
     // Surface cache for performance
     mutable std::unordered_set<Vector3, Vector3::Hash> surface_cache;

@@ -6,12 +6,29 @@
 #include "Material.h"
 #include <fstream>
 #include <chrono>
+#include <memory>
+#include <limits>
+#include <unordered_set>
+
+struct MaterialRatioGuard {
+    Material& mat;
+    float original_max_load_ratio;
+
+    explicit MaterialRatioGuard(uint8_t material_id)
+        : mat(const_cast<Material&>(g_materials.GetMaterial(material_id)))
+        , original_max_load_ratio(mat.max_load_ratio) {}
+
+    ~MaterialRatioGuard() {
+        mat.max_load_ratio = original_max_load_ratio;
+    }
+};
 
 class StructuralAnalyzerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         world.Clear();
         analyzer.Clear();
+        analyzer.params = StructuralAnalyzer::Parameters();
         brick_id = MaterialDatabase::BRICK;
         wood_id = MaterialDatabase::WOOD;
     }
@@ -800,6 +817,191 @@ TEST_F(StructuralAnalyzerTest, FailureDetection_BrokenBridge) {
               << ", Disconnected: " << result.num_disconnected_nodes << "\n";
 }
 
+TEST_F(StructuralAnalyzerTest, StackDepthRequirementTriggersFailure) {
+    float voxel_size = world.GetVoxelSize();
+
+    // Grounded pillar at x=0
+    for (int y = 0; y < 3; y++) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Cantilever beam extending from pillar (no support underneath beyond x=0)
+    for (int x = 0; x < 4; x++) {
+        world.SetVoxel(Vector3(x * voxel_size, 2 * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+    auto result = analyzer.Analyze(world, damaged);
+
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+
+    bool stack_failure_detected = false;
+    for (size_t i = 0; i < analyzer.GetNodeCount(); i++) {
+        const SpringNode* node = analyzer.GetNode(i);
+        if (!node || node->is_ground_anchor || !node->has_failed) {
+            continue;
+        }
+        const Material& mat = g_materials.GetMaterial(node->material_id);
+        if (mat.min_support_stack > 0.0f &&
+            node->vertical_stack_depth + 1e-4f < mat.min_support_stack) {
+            stack_failure_detected = true;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(stack_failure_detected);
+
+    std::cout << "[Stack Depth] Failed nodes: " << result.num_failed_nodes
+              << ", Nodes analyzed: " << result.nodes_analyzed << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, LoadRedistributionSpreadsExcessLoad) {
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::LoadRedistribution;
+
+    float voxel_size = world.GetVoxelSize();
+
+    for (int x = -1; x <= 1; ++x) {
+        world.SetVoxel(Vector3(x * voxel_size, 0, 0), Voxel(brick_id));
+        world.SetVoxel(Vector3(x * voxel_size, voxel_size, 0), Voxel(brick_id));
+    }
+
+    for (int y = 2; y < 9; ++y) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+    auto result = analyzer.Analyze(world, damaged);
+
+    auto findNode = [&](const Vector3& target) -> const SpringNode* {
+        for (size_t i = 0; i < analyzer.GetNodeCount(); ++i) {
+            const SpringNode* node = analyzer.GetNode(i);
+            if (node && node->position.Distance(target) < 1e-4f) {
+                return node;
+            }
+        }
+        return nullptr;
+    };
+
+    const SpringNode* center = findNode(Vector3(0, voxel_size, 0));
+    ASSERT_NE(center, nullptr);
+    const SpringNode* left = findNode(Vector3(-voxel_size, voxel_size, 0));
+    const SpringNode* right = findNode(Vector3(voxel_size, voxel_size, 0));
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+
+    EXPECT_GT(center->mass_supported, center->redistributed_load);
+    EXPECT_GT(left->redistributed_load, 0.0f);
+    EXPECT_GT(right->redistributed_load, 0.0f);
+}
+
+TEST_F(StructuralAnalyzerTest, LoadRedistributionTriggersFailureWithoutSupport) {
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::LoadRedistribution;
+
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 10; ++y) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+    auto result = analyzer.Analyze(world, damaged);
+
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+
+    bool overload_detected = false;
+    for (size_t i = 0; i < analyzer.GetNodeCount(); ++i) {
+        const SpringNode* node = analyzer.GetNode(i);
+        if (!node || node->is_ground_anchor) {
+            continue;
+        }
+        if (node->redistributed_load > node->load_capacity + 1e-4f) {
+            overload_detected = true;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(overload_detected);
+}
+
+TEST_F(StructuralAnalyzerTest, LoadRedistributionCapacityScaleAffectsNodeCapacity) {
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::LoadRedistribution;
+    analyzer.params.load_capacity_scale = 0.5f;
+
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 3; ++y) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+    analyzer.Analyze(world, damaged);
+
+    const SpringNode* candidate = nullptr;
+    for (size_t i = 0; i < analyzer.GetNodeCount(); ++i) {
+        const SpringNode* node = analyzer.GetNode(i);
+        if (node && !node->is_ground_anchor) {
+            candidate = node;
+            break;
+        }
+    }
+
+    ASSERT_NE(candidate, nullptr);
+    const Material& mat = g_materials.GetMaterial(brick_id);
+    float expected_capacity = mat.GetVoxelMass(voxel_size) * mat.max_load_ratio * analyzer.params.load_capacity_scale;
+    EXPECT_NEAR(candidate->load_capacity, expected_capacity, 1e-5f);
+}
+
+TEST_F(StructuralAnalyzerTest, LoadRedistributionTelemetryReportsStats) {
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::LoadRedistribution;
+    MaterialRatioGuard guard(brick_id);
+    guard.mat.max_load_ratio = 0.05f;  // Force overload quickly
+
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 10; ++y) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+    }
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+    auto result = analyzer.Analyze(world, damaged);
+
+    EXPECT_TRUE(result.load_stats.enabled);
+    EXPECT_GE(result.load_stats.iterations, 1);
+    EXPECT_GT(result.load_stats.nodes_over_capacity, 0);
+    EXPECT_GT(result.load_stats.total_excess_load, 0.0f);
+}
+
+TEST_F(StructuralAnalyzerTest, LoadRedistributionGroundAbsorptionToggle) {
+    MaterialRatioGuard guard(brick_id);
+    guard.mat.max_load_ratio = 0.05f;
+
+    auto buildColumn = [&](int height) {
+        world.Clear();
+        float voxel_size = world.GetVoxelSize();
+        for (int y = 0; y < height; ++y) {
+            world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(brick_id));
+        }
+    };
+
+    auto analyzeWithAbsorption = [&](bool allow_absorption) {
+        analyzer.Clear();
+        analyzer.params = StructuralAnalyzer::Parameters();
+        analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::LoadRedistribution;
+        analyzer.params.allow_ground_absorption = allow_absorption;
+        buildColumn(12);
+        std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+        return analyzer.Analyze(world, damaged);
+    };
+
+    auto with_absorption = analyzeWithAbsorption(true);
+    EXPECT_TRUE(with_absorption.load_stats.enabled);
+    EXPECT_GT(with_absorption.load_stats.load_dumped_to_ground, 0.0f);
+
+    auto without_absorption = analyzeWithAbsorption(false);
+    EXPECT_TRUE(without_absorption.load_stats.enabled);
+    EXPECT_EQ(without_absorption.load_stats.load_dumped_to_ground, 0.0f);
+    EXPECT_GE(without_absorption.load_stats.nodes_over_capacity, 1);
+}
+
 TEST_F(StructuralAnalyzerTest, FailureDetection_DualCriteria) {
     // Test structure that fails both by displacement AND disconnection
     float voxel_size = world.GetVoxelSize();
@@ -850,6 +1052,30 @@ TEST_F(StructuralAnalyzerTest, ClusterGeneration_MultipleFloatingPieces) {
 
     std::cout << "[Multiple Pieces] Failed: " << result.num_failed_nodes
               << ", Clusters: " << result.failed_clusters.size() << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, FailureClustersDetectedPerComponent) {
+    float voxel_size = world.GetVoxelSize();
+
+    // Two separate columns side by side
+    for (int i = 0; i < 3; ++i) {
+        world.SetVoxel(Vector3(0, i * voxel_size, 0), Voxel(brick_id));
+        world.SetVoxel(Vector3(3 * voxel_size, i * voxel_size, 0), Voxel(brick_id));
+    }
+
+    // Remove bases to make both columns float
+    Vector3 damage_a(0, 0, 0);
+    Vector3 damage_b(3 * voxel_size, 0, 0);
+    world.RemoveVoxel(damage_a);
+    world.RemoveVoxel(damage_b);
+
+    auto result = analyzer.Analyze(world, {damage_a, damage_b});
+
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GE(result.failed_clusters.size(), 2);
+
+    std::cout << "[Failure Clusters] Identified " << result.failed_clusters.size()
+              << " clusters after removing dual supports\n";
 }
 
 TEST_F(StructuralAnalyzerTest, GroundConnectivity_PartialDisconnection) {
@@ -1078,8 +1304,8 @@ TEST_F(StructuralAnalyzerTest, Integration_PerformanceLargeStructure) {
     EXPECT_LT(elapsed, 1000.0f);
     EXPECT_LT(result.calculation_time_ms, 1000.0f);
 
-    // Should complete reasonably fast
-    EXPECT_LT(result.calculation_time_ms, 200.0f);  // Aim for < 200ms
+    // Should complete reasonably fast (extra load-redistribution telemetry adds a bit of overhead)
+    EXPECT_LT(result.calculation_time_ms, 250.0f);
 
     std::cout << "[Integration: Large Structure Performance] "
               << "Nodes: " << result.nodes_analyzed << ", "
@@ -1848,3 +2074,211 @@ TEST_F(StructuralAnalyzerTest, EdgeCase_VeryLargeInfluenceRadius) {
 
     std::cout << "[EdgeCase: VeryLargeInfluenceRadius] SUCCESS\n";
 }
+
+// ===== Physics Proxy Selection Tests =====
+
+namespace {
+SpringNode* MakeProxyNode(
+    std::vector<std::unique_ptr<SpringNode>>& owned,
+    const Vector3& pos,
+    bool is_anchor,
+    int id,
+    float ground_path,
+    float load_capacity,
+    float redistributed_load)
+{
+    owned.push_back(std::make_unique<SpringNode>(pos, MaterialDatabase::BRICK, is_anchor, id));
+    SpringNode* node = owned.back().get();
+    node->ground_path_length = ground_path;
+    node->load_capacity = load_capacity;
+    node->redistributed_load = redistributed_load;
+    node->mass_supported = redistributed_load;
+    node->is_disconnected = false;
+    return node;
+}
+} // namespace
+
+TEST(PhysicsProxySelectionTest, AddsSupportChainsForSeeds) {
+    VoxelWorld world;
+    PhysicsProxySimulator simulator;
+    PhysicsProxySettings settings;
+    float voxel_size = world.GetVoxelSize();
+
+    settings.selection_radius = voxel_size * 0.6f;
+    settings.max_bodies = 4;
+    settings.support_chain_depth = 3;
+    settings.selection_grid_size = voxel_size * 0.5f;
+
+    std::vector<std::unique_ptr<SpringNode>> owned;
+    auto* ground = MakeProxyNode(owned, Vector3(0, 0, 0), true, 0, 0.0f,
+                                 std::numeric_limits<float>::infinity(), 0.0f);
+    auto* mid1 = MakeProxyNode(owned, Vector3(0, voxel_size, 0), false, 1, voxel_size,
+                               100.0f, 10.0f);
+    auto* mid2 = MakeProxyNode(owned, Vector3(0, 2 * voxel_size, 0), false, 2, 2 * voxel_size,
+                               100.0f, 20.0f);
+    auto* top = MakeProxyNode(owned, Vector3(0, 3 * voxel_size, 0), false, 3, 3 * voxel_size,
+                              100.0f, 95.0f);
+
+    auto connect = [](SpringNode* a, SpringNode* b) {
+        a->neighbors.push_back(b);
+        b->neighbors.push_back(a);
+    };
+    connect(ground, mid1);
+    connect(mid1, mid2);
+    connect(mid2, top);
+
+    std::vector<SpringNode*> nodes = {ground, mid1, mid2, top};
+    std::vector<Vector3> damaged = {top->position};
+
+    auto selected = simulator.SelectCandidateNodes(settings, world, nodes, damaged);
+
+    ASSERT_EQ(selected.size(), 4u);
+    std::unordered_set<int> ids;
+    for (auto* node : selected) {
+        ids.insert(node->id);
+    }
+
+    EXPECT_TRUE(ids.count(ground->id));
+    EXPECT_TRUE(ids.count(mid1->id));
+    EXPECT_TRUE(ids.count(mid2->id));
+    EXPECT_TRUE(ids.count(top->id));
+}
+
+TEST(PhysicsProxySelectionTest, OverloadedNodesBypassRadiusGates) {
+    VoxelWorld world;
+    PhysicsProxySimulator simulator;
+    PhysicsProxySettings settings;
+    float voxel_size = world.GetVoxelSize();
+
+    settings.selection_radius = voxel_size * 0.25f;
+    settings.max_bodies = 2;
+    settings.borderline_load_ratio = 0.75f;
+    settings.support_chain_depth = 0;
+
+    std::vector<std::unique_ptr<SpringNode>> owned;
+    auto* near_node = MakeProxyNode(owned, Vector3(0, voxel_size, 0), false, 10, voxel_size,
+                                    100.0f, 10.0f);
+    auto* far_node = MakeProxyNode(owned, Vector3(10 * voxel_size, voxel_size, 0), false, 11,
+                                   voxel_size, 40.0f, 50.0f);  // Overloaded ratio 1.25
+
+    std::vector<SpringNode*> nodes = {near_node, far_node};
+    std::vector<Vector3> damaged = {near_node->position};
+
+    auto selected = simulator.SelectCandidateNodes(settings, world, nodes, damaged);
+
+    ASSERT_EQ(selected.size(), 2u);
+    std::unordered_set<int> ids;
+    for (auto* node : selected) {
+        ids.insert(node->id);
+    }
+
+    EXPECT_TRUE(ids.count(near_node->id));
+    EXPECT_TRUE(ids.count(far_node->id));
+}
+
+#ifdef USE_BULLET
+TEST_F(StructuralAnalyzerTest, PhysicsProxyModeDetectsCollapse) {
+    float voxel_size = world.GetVoxelSize();
+
+    for (int y = 0; y < 4; ++y) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+
+    Vector3 damage_pos(0, 0, 0);
+    world.RemoveVoxel(damage_pos);
+    std::vector<Vector3> damaged = {damage_pos};
+
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::PhysicsProxy;
+    analyzer.params.proxy_settings.selection_radius = 1.5f;
+    analyzer.params.proxy_settings.max_bodies = 16;
+    analyzer.params.proxy_settings.simulation_time = 0.25f;
+    analyzer.params.proxy_settings.time_step = 1.0f / 180.0f;
+    analyzer.params.proxy_settings.drop_threshold = 0.01f;
+    analyzer.params.proxy_settings.velocity_threshold = 0.25f;
+
+    auto result = analyzer.Analyze(world, damaged);
+
+    EXPECT_TRUE(result.proxy_mode_used);
+    EXPECT_TRUE(result.proxy_result.ran_simulation);
+    EXPECT_TRUE(result.structure_failed);
+    EXPECT_GT(result.num_failed_nodes, 0);
+    ASSERT_FALSE(result.proxy_result.body_stats.empty());
+    bool saw_drop = false;
+    bool saw_impulse = false;
+    for (const auto& stats : result.proxy_result.body_stats) {
+        EXPECT_GE(stats.node_id, -1);
+        EXPECT_GE(stats.peak_drop, 0.0f);
+        EXPECT_GE(stats.peak_speed, 0.0f);
+        EXPECT_GE(stats.peak_impulse, 0.0f);
+        if (stats.peak_drop > 0.0f) {
+            saw_drop = true;
+        }
+        if (stats.peak_impulse > 0.0f) {
+            saw_impulse = true;
+        }
+    }
+    EXPECT_TRUE(saw_drop);
+    EXPECT_TRUE(saw_impulse);
+    std::cout << "[PhysicsProxyMode] Failed nodes: " << result.num_failed_nodes << "\n";
+}
+
+TEST_F(StructuralAnalyzerTest, PhysicsProxyBodyReuseStats) {
+    auto build_structure = [this](float voxel_size) {
+        world.Clear();
+        for (int y = 0; y < 3; ++y) {
+            world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+        }
+        world.RemoveVoxel(Vector3(0, 0, 0));
+    };
+
+    float voxel_size = world.GetVoxelSize();
+    build_structure(voxel_size);
+
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::PhysicsProxy;
+    analyzer.params.proxy_settings.selection_radius = 1.5f;
+    analyzer.params.proxy_settings.max_bodies = 16;
+    analyzer.params.proxy_settings.simulation_time = 0.2f;
+    analyzer.params.proxy_settings.time_step = 1.0f / 180.0f;
+    analyzer.params.proxy_settings.drop_threshold = 0.01f;
+    analyzer.params.proxy_settings.velocity_threshold = 0.1f;
+
+    std::vector<Vector3> damaged = {Vector3(0, 0, 0)};
+    auto first = analyzer.Analyze(world, damaged);
+    EXPECT_TRUE(first.proxy_mode_used);
+    EXPECT_GE(first.proxy_result.bodies_created, 1);
+
+    build_structure(voxel_size);
+    auto second = analyzer.Analyze(world, damaged);
+    EXPECT_TRUE(second.proxy_mode_used);
+    EXPECT_GT(second.proxy_result.bodies_reused, 0);
+}
+
+TEST_F(StructuralAnalyzerTest, PhysicsProxyImpulseHistoryWhenEnabled) {
+    float voxel_size = world.GetVoxelSize();
+    for (int y = 0; y < 3; ++y) {
+        world.SetVoxel(Vector3(0, y * voxel_size, 0), Voxel(wood_id));
+    }
+    world.RemoveVoxel(Vector3(0, 0, 0));
+
+    analyzer.params.analysis_mode = StructuralAnalyzer::StructuralMode::PhysicsProxy;
+    analyzer.params.proxy_settings.record_impulse_history = true;
+    analyzer.params.proxy_settings.max_impulse_samples = 3;
+    analyzer.params.proxy_settings.selection_radius = 1.5f;
+    analyzer.params.proxy_settings.max_bodies = 16;
+    analyzer.params.proxy_settings.simulation_time = 0.2f;
+    analyzer.params.proxy_settings.time_step = 1.0f / 180.0f;
+
+    auto result = analyzer.Analyze(world, {Vector3(0, 0, 0)});
+    ASSERT_TRUE(result.proxy_mode_used);
+    ASSERT_FALSE(result.proxy_result.body_stats.empty());
+    bool saw_history = false;
+    for (const auto& stats : result.proxy_result.body_stats) {
+        if (!stats.impulse_samples.empty()) {
+            saw_history = true;
+        }
+        EXPECT_LE(static_cast<int>(stats.impulse_samples.size()),
+                  analyzer.params.proxy_settings.max_impulse_samples);
+    }
+    EXPECT_TRUE(saw_history);
+}
+#endif

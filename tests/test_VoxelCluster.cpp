@@ -2,6 +2,7 @@
 #include "VoxelCluster.h"
 #include "VoxelWorld.h"
 #include "Material.h"
+#include "VoxelClusterTracker.h"
 
 // Test fixture for VoxelCluster tests
 class VoxelClusterTest : public ::testing::Test {
@@ -209,6 +210,54 @@ TEST_F(VoxelClusterTest, GroundedCluster) {
     ASSERT_EQ(clusters.size(), 1);
     ASSERT_EQ(grounded.size(), 1);
     EXPECT_TRUE(grounded[0]);  // Should be grounded
+}
+
+TEST_F(VoxelClusterTest, ClusterTrackerCachesAndUpdates) {
+    VoxelClusterTracker tracker(&world);
+
+    world.SetVoxel(Vector3(0, 0, 0), Voxel(MaterialDatabase::BRICK));
+    world.SetVoxel(Vector3(voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+    world.SetVoxel(Vector3(5 * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+
+    auto clusters = tracker.GetClusters();
+    ASSERT_EQ(clusters.size(), 2);
+    size_t tracker_version = tracker.GetTrackerVersion();
+    EXPECT_FALSE(tracker.NeedsUpdate());
+
+    // Connect the structures and ensure tracker rebuilds on next query
+    world.SetVoxel(Vector3(2 * voxel_size, 0, 0), Voxel(MaterialDatabase::BRICK));
+    EXPECT_TRUE(tracker.NeedsUpdate());
+
+    auto updated = tracker.GetClusters();
+    EXPECT_EQ(updated.size(), 1);
+    EXPECT_GT(tracker.GetTrackerVersion(), tracker_version);
+}
+
+TEST_F(VoxelClusterTest, ClusterTrackerFindsContainingCluster) {
+    VoxelClusterTracker tracker(&world);
+
+    Vector3 first(0, 0, 0);
+    Vector3 second(5 * voxel_size, 0, 0);
+    world.SetVoxel(first, Voxel(MaterialDatabase::BRICK));
+    world.SetVoxel(second, Voxel(MaterialDatabase::CONCRETE));
+
+    tracker.GetClusters();
+
+    const VoxelCluster* first_cluster = tracker.FindClusterContaining(first);
+    ASSERT_NE(first_cluster, nullptr);
+    EXPECT_EQ(first_cluster->dominant_material, MaterialDatabase::BRICK);
+
+    const VoxelCluster* second_cluster = tracker.FindClusterContaining(second);
+    ASSERT_NE(second_cluster, nullptr);
+    EXPECT_EQ(second_cluster->dominant_material, MaterialDatabase::CONCRETE);
+
+    Vector3 empty_pos(10 * voxel_size, 0, 0);
+    EXPECT_EQ(tracker.FindClusterContaining(empty_pos), nullptr);
+
+    // Removing a voxel should invalidate cache
+    world.RemoveVoxel(second);
+    tracker.GetClusters();  // rebuild
+    EXPECT_EQ(tracker.FindClusterContaining(second), nullptr);
 }
 
 TEST_F(VoxelClusterTest, FloatingCluster) {

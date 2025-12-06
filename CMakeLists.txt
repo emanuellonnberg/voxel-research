@@ -109,12 +109,14 @@ add_library(VoxelCore
     src/core/Vector3.cpp
     src/core/Material.cpp
     src/core/TurnManager.cpp
+    src/core/JobSystem.cpp  # Week 13 Day 41: Multi-threading
 
     # Voxel system
     src/voxel/VoxelWorld.cpp
     src/voxel/VoxelUtils.cpp
     src/voxel/SpatialHash.cpp
     src/voxel/VoxelCluster.cpp
+    src/voxel/VoxelClusterTracker.cpp
     src/voxel/VoxelStability.cpp
 
     # Rendering (Week 1 Day 3, Week 5 Day 28, Week 7 Day 32)
@@ -123,8 +125,9 @@ add_library(VoxelCore
     src/rendering/ParticleSystem.cpp
     src/rendering/VisualFeedback.cpp
 
-    # Structural analysis (Week 3-4)
+    # Structural analysis (Week 3-4, Week 8+: Max-Flow variant)
     src/structural/StructuralAnalyzer.cpp
+    src/structural/MaxFlowStructuralAnalyzer.cpp
     src/structural/ParameterTuning.cpp
     src/structural/VoxelFragmentation.cpp
 
@@ -132,6 +135,7 @@ add_library(VoxelCore
     $<$<BOOL:${USE_BULLET}>:src/physics/BulletEngine.cpp>
     src/physics/VoxelPhysicsIntegration.cpp
     src/physics/RubbleSystem.cpp
+    src/physics/PhysicsProxySimulator.cpp
     $<$<BOOL:${USE_BULLET}>:src/physics/ImpactDetector.cpp>
 )
 
@@ -179,6 +183,9 @@ if(BUILD_TESTS)
         tests/test_VoxelCluster.cpp
         tests/test_VoxelStability.cpp
         tests/test_StructuralAnalyzer.cpp
+        tests/test_MaxFlowStructuralAnalyzer.cpp
+        tests/test_FEMValidation.cpp
+        tests/test_JobSystem.cpp  # Week 13 Day 41: Multi-threading
         tests/test_PhysicsEngine.cpp
         tests/test_VoxelPhysicsIntegration.cpp
         tests/test_Integration.cpp
@@ -234,12 +241,26 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(ScenarioTests VoxelCore)
 
+    # Week 8 Day 35: Showcase demo
+    add_executable(ShowcaseDemo
+        examples/showcase_demo.cpp
+    )
+    target_link_libraries(ShowcaseDemo VoxelCore)
+
+    # Week 8+: Analyzer comparison (Spring vs Max-Flow)
+    add_executable(AnalyzerComparison
+        examples/analyzer_comparison.cpp
+    )
+    target_link_libraries(AnalyzerComparison VoxelCore)
+
     # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
         target_compile_definitions(FullDestructionDemo PRIVATE USE_BULLET)
         target_compile_definitions(PerformanceProfiling PRIVATE USE_BULLET)
         target_compile_definitions(ScenarioTests PRIVATE USE_BULLET)
+        target_compile_definitions(ShowcaseDemo PRIVATE USE_BULLET)
+        target_compile_definitions(AnalyzerComparison PRIVATE USE_BULLET)
     endif()
 endif()
 

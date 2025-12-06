@@ -180,6 +180,48 @@ TEST_F(VoxelPhysicsIntegrationTest, RemoveOutOfBoundsDebris) {
     EXPECT_TRUE(integration->IsClusterSpawned(3));
 }
 
+TEST_F(VoxelPhysicsIntegrationTest, SettledDebrisConvertedToVisuals) {
+    integration = CreateIntegrationNoFragmentation();
+    integration->SetSettlingThresholds(1000.0f, 0.0f, 0.0f);
+    integration->SetSettledCleanupDelay(0.0f);
+    integration->SetSettledVisualLifetime(0.0f);
+
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 3, Vector3(0, 10, 0)));
+    integration->SpawnDebris(clusters);
+    EXPECT_EQ(integration->GetDebrisCount(), 1);
+
+    integration->Step(1.0f / 60.0f);
+
+    EXPECT_EQ(integration->GetDebrisCount(), 0);
+    EXPECT_GT(integration->GetSettledVisualCount(), 0);
+
+    std::vector<Transform> transforms;
+    std::vector<uint8_t> materials;
+    integration->GetDebrisRenderData(transforms, materials);
+    EXPECT_FALSE(transforms.empty());
+    EXPECT_EQ(transforms.size(), materials.size());
+}
+
+TEST_F(VoxelPhysicsIntegrationTest, SettledVisualsExpireAfterLifetime) {
+    integration = CreateIntegrationNoFragmentation();
+    integration->SetSettlingThresholds(1000.0f, 0.0f, 0.0f);
+    integration->SetSettledCleanupDelay(0.0f);
+    integration->SetSettledVisualLifetime(0.05f);
+
+    std::vector<VoxelCluster> clusters;
+    clusters.push_back(CreateTestCluster(1, 2, Vector3(0, 5, 0)));
+    integration->SpawnDebris(clusters);
+    integration->Step(1.0f / 60.0f);
+
+    EXPECT_GT(integration->GetSettledVisualCount(), 0);
+
+    // Advance time beyond lifetime
+    integration->Step(0.1f);
+
+    EXPECT_EQ(integration->GetSettledVisualCount(), 0);
+}
+
 // ===== Configuration =====
 
 TEST_F(VoxelPhysicsIntegrationTest, SetVoxelDensity) {

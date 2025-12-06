@@ -147,6 +147,9 @@ public:
      * Week 5 Day 29: Distance-based cleanup
      */
     int RemoveDebrisBeyondDistance(const Vector3& position, float max_distance);
+    void SetSettledCleanupDelay(float seconds);
+    void SetSettledVisualLifetime(float seconds);
+    int GetSettledVisualCount() const { return static_cast<int>(settled_visuals.size()); }
 
     // ===== Queries =====
 
@@ -339,4 +342,21 @@ private:
      * Week 5 Day 26: Settling detection
      */
     void UpdateDebrisStates(float deltaTime);
+
+    int CleanupSettledDebris();
+    void RemoveExpiredSettledVisuals();
+    void CreateGroundPlane();
+
+    struct SettledDebrisVisual {
+        Transform transform;
+        uint8_t material_id;
+        uint32_t cluster_id;
+        float settled_time;
+    };
+
+    std::vector<SettledDebrisVisual> settled_visuals;
+    float settled_cleanup_delay;
+    float settled_visual_lifetime;
+    PhysicsBodyHandle ground_body = nullptr;
+    CollisionShapeHandle ground_shape = nullptr;
 };

@@ -6,26 +6,53 @@
 #ifdef RENDERING_ENABLED
 
 namespace {
-// Cube vertices: positions only (centered at origin, size 1)
+// Cube vertices: position (xyz) + normal (xyz) for each face (24 vertices)
 constexpr float kCubeVertices[] = {
-    -0.5f, -0.5f, -0.5f,
-     0.5f, -0.5f, -0.5f,
-     0.5f,  0.5f, -0.5f,
-    -0.5f,  0.5f, -0.5f,
-    -0.5f, -0.5f,  0.5f,
-     0.5f, -0.5f,  0.5f,
-     0.5f,  0.5f,  0.5f,
-    -0.5f,  0.5f,  0.5f
+    // Front face (z+)
+    -0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,
+     0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,
+     0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,
+    -0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,
+
+    // Back face (z-)
+    -0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,
+    -0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,
+     0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,
+     0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,
+
+    // Left face (x-)
+    -0.5f, -0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,
+    -0.5f,  0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,
+
+    // Right face (x+)
+     0.5f, -0.5f, -0.5f,   1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,   1.0f,  0.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,   1.0f,  0.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,   1.0f,  0.0f,  0.0f,
+
+    // Bottom face (y-)
+    -0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,
+     0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,
+    -0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,
+
+    // Top face (y+)
+    -0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,
+    -0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,
+     0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,
 };
 
-// 12 triangles (36 indices) forming the cube
+// 12 triangles (36 indices) forming the cube, referencing the 24 unique vertices
 constexpr unsigned int kCubeIndices[] = {
-    0, 1, 2,  2, 3, 0,
-    4, 5, 6,  6, 7, 4,
-    0, 3, 7,  7, 4, 0,
-    1, 5, 6,  6, 2, 1,
-    0, 1, 5,  5, 4, 0,
-    3, 2, 6,  6, 7, 3
+     0,  1,  2,   2,  3,  0,   // Front
+     4,  5,  6,   6,  7,  4,   // Back
+     8,  9, 10,  10, 11,  8,   // Left
+    12, 13, 14,  14, 15, 12,   // Right
+    16, 17, 18,  18, 19, 16,   // Bottom
+    20, 21, 22,  22, 23, 20    // Top
 };
 
 constexpr GLsizei kCubeIndexCount = static_cast<GLsizei>(sizeof(kCubeIndices) / sizeof(unsigned int));
@@ -33,8 +60,9 @@ constexpr GLsizei kCubeIndexCount = static_cast<GLsizei>(sizeof(kCubeIndices) / 
 const char* kVertexShaderSrc = R"(
     #version 330 core
     layout (location = 0) in vec3 aPos;
-    layout (location = 1) in mat4 aInstanceMatrix;
-    layout (location = 5) in vec3 aInstanceColor;
+    layout (location = 1) in vec3 aNormal;
+    layout (location = 2) in mat4 aInstanceMatrix;
+    layout (location = 6) in vec3 aInstanceColor;
 
     uniform mat4 view;
     uniform mat4 projection;
@@ -49,8 +77,9 @@ const char* kVertexShaderSrc = R"(
         Color = aInstanceColor;
         gl_Position = projection * view * worldPos;
 
-        mat3 normalMat = mat3(transpose(inverse(aInstanceMatrix)));
-        Normal = normalize(normalMat * vec3(0.0, 1.0, 0.0));
+        mat3 modelMat = mat3(aInstanceMatrix);
+        mat3 normalMat = transpose(inverse(modelMat));
+        Normal = normalize(normalMat * aNormal);
     }
 )";
 
@@ -70,7 +99,8 @@ const char* kFragmentShaderSrc = R"(
         vec3 finalColor = Color;
         if (enableLighting) {
             vec3 lightColor = vec3(1.0, 1.0, 1.0);
-            float ambientStrength = 0.3;
+            float ambientStrength = 0.25;
+            float specularStrength = 0.2;
             vec3 ambient = ambientStrength * lightColor;
 
             vec3 norm = normalize(Normal);
@@ -78,7 +108,12 @@ const char* kFragmentShaderSrc = R"(
             float diff = max(dot(norm, lightDir), 0.0);
             vec3 diffuse = diff * lightColor;
 
-            finalColor = (ambient + diffuse) * Color;
+            vec3 viewDir = normalize(viewPos - FragPos);
+            vec3 reflectDir = reflect(-lightDir, norm);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+            vec3 specular = specularStrength * spec * lightColor;
+
+            finalColor = (ambient + diffuse) * Color + specular;
         }
 
         FragColor = vec4(finalColor, 1.0);
@@ -211,15 +246,22 @@ bool VoxelRenderer::CreateCubeGeometry() {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(kCubeIndices), kCubeIndices, GL_STATIC_DRAW);
     index_count = kCubeIndexCount;
 
+    const GLsizei stride = static_cast<GLsizei>(6 * sizeof(float));
+    const void* normal_offset = (void*)(3 * sizeof(float));
+
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, normal_offset);
 
     glGenVertexArrays(1, &vao_dynamic);
     glBindVertexArray(vao_dynamic);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_cube);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, normal_offset);
 
     glBindVertexArray(0);
     return true;
@@ -244,18 +286,19 @@ bool VoxelRenderer::SetupInstancedRendering() {
     glBindBuffer(GL_ARRAY_BUFFER, vbo_instance_matrices);
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
 
+    const GLuint matrix_attr_base = 2;
     for (int i = 0; i < 4; i++) {
-        glEnableVertexAttribArray(1 + i);
-        glVertexAttribPointer(1 + i, 4, GL_FLOAT, GL_FALSE, mat4_size, (void*)(static_cast<uintptr_t>(vec4_size * i)));
-        glVertexAttribDivisor(1 + i, 1);
+        glEnableVertexAttribArray(matrix_attr_base + i);
+        glVertexAttribPointer(matrix_attr_base + i, 4, GL_FLOAT, GL_FALSE, mat4_size, (void*)(static_cast<uintptr_t>(vec4_size * i)));
+        glVertexAttribDivisor(matrix_attr_base + i, 1);
     }
 
     glGenBuffers(1, &vbo_instance_colors);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_instance_colors);
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
-    glEnableVertexAttribArray(5);
-    glVertexAttribPointer(5, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glVertexAttribDivisor(5, 1);
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribDivisor(6, 1);
 
     glBindVertexArray(vao_dynamic);
 
@@ -264,17 +307,17 @@ bool VoxelRenderer::SetupInstancedRendering() {
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
 
     for (int i = 0; i < 4; i++) {
-        glEnableVertexAttribArray(1 + i);
-        glVertexAttribPointer(1 + i, 4, GL_FLOAT, GL_FALSE, mat4_size, (void*)(static_cast<uintptr_t>(vec4_size * i)));
-        glVertexAttribDivisor(1 + i, 1);
+        glEnableVertexAttribArray(matrix_attr_base + i);
+        glVertexAttribPointer(matrix_attr_base + i, 4, GL_FLOAT, GL_FALSE, mat4_size, (void*)(static_cast<uintptr_t>(vec4_size * i)));
+        glVertexAttribDivisor(matrix_attr_base + i, 1);
     }
 
     glGenBuffers(1, &vbo_dynamic_colors);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_dynamic_colors);
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
-    glEnableVertexAttribArray(5);
-    glVertexAttribPointer(5, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glVertexAttribDivisor(5, 1);
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribDivisor(6, 1);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
@@ -490,10 +533,16 @@ void VoxelRenderer::Render(const Camera& camera, float aspect_ratio) {
     Vector3 cam_pos = camera.GetPosition();
     glUniform3f(view_pos_loc, cam_pos.x, cam_pos.y, cam_pos.z);
 
-    glBindVertexArray(vao);
-    if (rendered_voxel_count > 0) {
+    if (rendered_voxel_count > 0 && vao_static) {
+        glBindVertexArray(vao_static);
         glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, rendered_voxel_count);
     }
+
+    if (dynamic_instance_count > 0 && vao_dynamic) {
+        glBindVertexArray(vao_dynamic);
+        glDrawElementsInstanced(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, nullptr, dynamic_instance_count);
+    }
+
     glBindVertexArray(0);
 
     double now = glfwGetTime();

@@ -8,6 +8,8 @@
 #include "Camera.h"
 #include "Renderer.h"
 #include "VoxelCluster.h"
+#include "VoxelClusterTracker.h"
+#include "StructuralAnalyzer.h"
 #ifdef USE_BULLET
 #include "VoxelPhysicsIntegration.h"
 #include "BulletEngine.h"
@@ -222,7 +224,10 @@ bool RemoveVoxelUnderCrosshair(VoxelWorld& world, const Camera& camera, RemovedV
     return true;
 }
 
-bool AddVoxelUnderCrosshair(VoxelWorld& world, const Camera& camera, uint8_t material_id) {
+bool AddVoxelUnderCrosshair(VoxelWorld& world,
+                            const Camera& camera,
+                            uint8_t material_id,
+                            Vector3* out_position = nullptr) {
     Vector3 forward = camera.GetForward().Normalized();
     auto hits = world.Raycast(camera.GetPosition(), camera.GetForward(), kEditRange);
 
@@ -239,6 +244,9 @@ bool AddVoxelUnderCrosshair(VoxelWorld& world, const Camera& camera, uint8_t mat
     }
 
     world.SetVoxel(target, Voxel(material_id));
+    if (out_position) {
+        *out_position = target;
+    }
     return true;
 }
 
@@ -405,6 +413,13 @@ int main(int argc, char** argv) {
     VoxelWorld world(0.05f);  // 5cm voxels
     std::cout << "Created voxel world (voxel size: " << world.GetVoxelSize() << "m)\n\n";
 
+    VoxelClusterTracker cluster_tracker(&world);
+    StructuralAnalyzer analyzer;
+    std::vector<Vector3> pending_analysis_positions;
+    pending_analysis_positions.reserve(32);
+    bool analysis_pending = false;
+    std::string pending_analysis_reason;
+
 #ifdef USE_BULLET
     std::unique_ptr<BulletEngine> bullet_engine = std::make_unique<BulletEngine>();
     std::unique_ptr<VoxelPhysicsIntegration> physics_integration;
@@ -520,10 +535,81 @@ int main(int argc, char** argv) {
 #ifdef RENDERING_ENABLED
     std::cout << "  Left Click: Remove voxel\n";
     std::cout << "  Right Click: Add voxel (brick)\n\n";
-    std::cout << "  F1: Toggle wireframe\n\n";
+    std::cout << "  F1: Toggle wireframe\n";
+    std::cout << "  F2: Force structural analysis at crosshair\n\n";
 #endif
 
 #ifdef RENDERING_ENABLED
+    auto request_analysis = [&](const std::vector<Vector3>& positions, const std::string& reason) {
+        if (positions.empty()) {
+            return;
+        }
+        pending_analysis_positions.insert(pending_analysis_positions.end(), positions.begin(), positions.end());
+        pending_analysis_reason = reason;
+        analysis_pending = true;
+        cluster_tracker.MarkDirty();
+    };
+
+    auto request_analysis_single = [&](const Vector3& position, const std::string& reason) {
+        request_analysis({position}, reason);
+    };
+
+    auto run_analysis_if_needed = [&]() {
+        if (!analysis_pending || pending_analysis_positions.empty()) {
+            return;
+        }
+
+        std::vector<Vector3> damaged_positions = pending_analysis_positions;
+        pending_analysis_positions.clear();
+
+        std::string reason = pending_analysis_reason.empty()
+                                 ? std::string("voxel edit")
+                                 : pending_analysis_reason;
+
+        AnalysisResult result = analyzer.Analyze(world, damaged_positions);
+        analysis_pending = false;
+        pending_analysis_reason.clear();
+
+        size_t cluster_count_before = cluster_tracker.GetClusters().size();
+
+        if (result.structure_failed && !result.failed_clusters.empty()) {
+            std::cout << "[Analyzer] " << reason << ": instability detected - "
+                      << result.failed_clusters.size() << " failing clusters, "
+                      << result.num_failed_nodes << " failed nodes ("
+                      << result.calculation_time_ms << "ms, "
+                      << cluster_count_before << " clusters)\n";
+
+            std::vector<VoxelCluster> spawn_clusters = result.failed_clusters;
+            for (auto& cluster : spawn_clusters) {
+                if (cluster.cluster_id == 0) {
+                    cluster.cluster_id = next_cluster_id++;
+                }
+
+                for (const auto& pos : cluster.voxel_positions) {
+                    world.RemoveVoxel(pos);
+                }
+            }
+
+            renderer.UpdateVoxels(world);
+            cluster_tracker.MarkDirty();
+
+#ifdef USE_BULLET
+            if (physics_integration) {
+                physics_integration->SpawnDebris(spawn_clusters);
+            }
+#endif
+
+            if (!spawn_clusters.empty() && !spawn_clusters[0].voxel_positions.empty()) {
+                request_analysis_single(spawn_clusters[0].voxel_positions[0], "post-collapse follow-up");
+            }
+        } else {
+            std::cout << "[Analyzer] " << reason << ": structure stable ("
+                      << result.nodes_analyzed << " nodes, "
+                      << cluster_count_before << " connected clusters, "
+                      << result.calculation_time_ms << "ms)\n";
+        }
+    };
+
     window.SetCursorMode(true);
     bool mouse_initialized = false;
     double last_mouse_x = 0.0;
@@ -532,6 +618,30 @@ int main(int argc, char** argv) {
     bool right_mouse_down = false;
     bool wireframe_enabled = false;
     bool wireframe_key_down = false;
+    bool analyze_key_down = false;
+
+    auto queue_initial_analysis = [&]() {
+        std::vector<Vector3> seed_positions;
+        const auto& surface_voxels = world.GetSurfaceVoxels();
+        for (const auto& pos : surface_voxels) {
+            seed_positions.push_back(pos);
+            if (seed_positions.size() >= 64) {
+                break;
+            }
+        }
+        if (seed_positions.empty()) {
+            auto all = world.GetAllVoxelPositions();
+            for (const auto& pos : all) {
+                seed_positions.push_back(pos);
+                if (seed_positions.size() >= 32) {
+                    break;
+                }
+            }
+        }
+        request_analysis(seed_positions, "initial stability check");
+    };
+
+    queue_initial_analysis();
 #endif
 
     // Main loop
@@ -615,6 +725,7 @@ int main(int argc, char** argv) {
             RemovedVoxelInfo removed_info;
             if (RemoveVoxelUnderCrosshair(world, camera, &removed_info)) {
                 renderer.UpdateVoxels(world);
+                request_analysis_single(removed_info.position, "voxel removed");
 #ifdef USE_BULLET
                 if (physics_integration) {
                     SpawnSingleVoxelDebris(*physics_integration, removed_info, world.GetVoxelSize(), next_cluster_id);
@@ -627,8 +738,10 @@ int main(int argc, char** argv) {
 
         bool right_pressed = window.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
         if (right_pressed && !right_mouse_down) {
-            if (AddVoxelUnderCrosshair(world, camera, MaterialDatabase::BRICK)) {
+            Vector3 added_position;
+            if (AddVoxelUnderCrosshair(world, camera, MaterialDatabase::BRICK, &added_position)) {
                 renderer.UpdateVoxels(world);
+                request_analysis_single(added_position, "voxel added");
                 std::cout << "[Edit] Added voxel under crosshair\n";
             }
         }
@@ -641,6 +754,23 @@ int main(int argc, char** argv) {
             std::cout << "[Render] Wireframe " << (wireframe_enabled ? "ON" : "OFF") << "\n";
         }
         wireframe_key_down = wire_key;
+
+        bool analyze_key = window.IsKeyPressed(GLFW_KEY_F2);
+        if (analyze_key && !analyze_key_down) {
+            std::vector<Vector3> hits = world.Raycast(camera.GetPosition(), camera.GetForward(), kEditRange);
+            if (!hits.empty()) {
+                request_analysis(hits, "manual analysis");
+                std::cout << "[Analyzer] Manual analysis requested at crosshair (" << hits.size() << " samples)\n";
+            } else {
+                request_analysis_single(camera.GetPosition(), "manual analysis (camera origin)");
+                std::cout << "[Analyzer] Manual analysis requested at camera origin\n";
+            }
+        }
+        analyze_key_down = analyze_key;
+#endif
+
+#ifdef RENDERING_ENABLED
+        run_analysis_if_needed();
 #endif
 
         camera.ProcessKeyboard(forward, right, up, dt);
