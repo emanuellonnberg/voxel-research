@@ -202,13 +202,24 @@ int VoxelPhysicsIntegration::SpawnDebris(const std::vector<VoxelCluster>& cluste
             // Apply collision filtering (Bullet only)
 #ifdef USE_BULLET
             if (dynamic_cast<BulletEngine*>(physics_engine)) {
+                BulletEngine* bullet_engine = static_cast<BulletEngine*>(physics_engine);
                 btRigidBody* bt_body = static_cast<btRigidBody*>(body);
-                if (bt_body && bt_body->getBroadphaseHandle()) {
+                if (bt_body) {
                     short debris_mask = debris_collides_debris ?
-                        (COL_GROUND | COL_DEBRIS | COL_UNITS) :
-                        (COL_GROUND | COL_UNITS);
-                    bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
-                    bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+                        (COL_GROUND | COL_DEBRIS | COL_UNITS | COL_VOXELS) :
+                        (COL_GROUND | COL_UNITS | COL_VOXELS);
+
+                    // CRITICAL FIX: Remove from world, then re-add with correct collision groups
+                    // This ensures Bullet creates proper broadphase pairs
+                    btDiscreteDynamicsWorld* world = bullet_engine->GetDynamicsWorld();
+                    if (world) {
+                        world->removeRigidBody(bt_body);
+                        world->addRigidBody(bt_body, COL_DEBRIS, debris_mask);
+
+                        std::cout << "[VoxelPhysicsIntegration] Debris collision filtering:\n";
+                        std::cout << "  Group: 0x" << std::hex << static_cast<int>(COL_DEBRIS) << std::dec << " (COL_DEBRIS)\n";
+                        std::cout << "  Mask:  0x" << std::hex << debris_mask << std::dec << "\n";
+                    }
                 }
             }
 #endif
@@ -312,13 +323,25 @@ int VoxelPhysicsIntegration::SpawnDebrisSerial(const std::vector<VoxelCluster>& 
 
 #ifdef USE_BULLET
             if (dynamic_cast<BulletEngine*>(physics_engine)) {
+                BulletEngine* bullet_engine = static_cast<BulletEngine*>(physics_engine);
                 btRigidBody* bt_body = static_cast<btRigidBody*>(body);
-                if (bt_body && bt_body->getBroadphaseHandle()) {
+                std::cout << "[VoxelPhysicsIntegration] SpawnDebrisSerial: bt_body=" << bt_body << "\n";
+                if (bt_body) {
                     short debris_mask = debris_collides_debris ?
-                        (COL_GROUND | COL_DEBRIS | COL_UNITS) :
-                        (COL_GROUND | COL_UNITS);
-                    bt_body->getBroadphaseHandle()->m_collisionFilterGroup = COL_DEBRIS;
-                    bt_body->getBroadphaseHandle()->m_collisionFilterMask = debris_mask;
+                        (COL_GROUND | COL_DEBRIS | COL_UNITS | COL_VOXELS) :
+                        (COL_GROUND | COL_UNITS | COL_VOXELS);
+
+                    // CRITICAL FIX: Remove from world, then re-add with correct collision groups
+                    // This ensures Bullet creates proper broadphase pairs
+                    btDiscreteDynamicsWorld* world = bullet_engine->GetDynamicsWorld();
+                    if (world) {
+                        world->removeRigidBody(bt_body);
+                        world->addRigidBody(bt_body, COL_DEBRIS, debris_mask);
+
+                        std::cout << "[VoxelPhysicsIntegration] SpawnDebrisSerial collision filtering:\n";
+                        std::cout << "  Group: 0x" << std::hex << static_cast<int>(COL_DEBRIS) << std::dec << " (COL_DEBRIS)\n";
+                        std::cout << "  Mask:  0x" << std::hex << debris_mask << std::dec << "\n";
+                    }
                 }
             }
 #endif
@@ -962,10 +985,10 @@ void VoxelPhysicsIntegration::SetCollisionFiltering(bool debris_collides_debris_
     short debris_mask;
     if (debris_collides_debris_flag) {
         // Debris collides with everything
-        debris_mask = COL_GROUND | COL_DEBRIS | COL_UNITS;
+        debris_mask = COL_GROUND | COL_DEBRIS | COL_UNITS | COL_VOXELS;
     } else {
-        // Debris collides with ground and units, NOT other debris (optimization)
-        debris_mask = COL_GROUND | COL_UNITS;
+        // Debris collides with ground, units, and voxels, NOT other debris (optimization)
+        debris_mask = COL_GROUND | COL_UNITS | COL_VOXELS;
     }
 
     // Apply collision filtering to all existing debris

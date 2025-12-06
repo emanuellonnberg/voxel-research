@@ -11,6 +11,10 @@ class btDiscreteDynamicsWorld;
 class btRigidBody;
 class btCollisionShape;
 
+// Forward declare debris-voxel collision system
+class ChunkedVoxelCollision;
+class VoxelWorld;
+
 /**
  * Bullet Physics Engine (Week 5 Day 22)
  *
@@ -96,4 +100,37 @@ public:
     // Bullet-only accessors
     btDiscreteDynamicsWorld* GetDynamicsWorld() { return dynamics_world; }
     const btDiscreteDynamicsWorld* GetDynamicsWorld() const { return dynamics_world; }
+
+    // ===== Debris-Voxel Collision System =====
+    /**
+     * Set the voxel world for collision generation
+     */
+    void SetVoxelWorld(VoxelWorld* world);
+
+    /**
+     * Build collision meshes for entire voxel world
+     */
+    void BuildVoxelCollision();
+
+    /**
+     * Notify system that voxels were changed
+     * @param positions Positions of changed voxels
+     */
+    void OnVoxelsChanged(const std::vector<Vector3>& positions);
+
+    /**
+     * Update voxel collision system (rebuilds dirty chunks)
+     * @param deltaTime Time since last update
+     */
+    void UpdateVoxelCollision(float deltaTime);
+
+    /**
+     * Get voxel collision system (for advanced usage)
+     */
+    ChunkedVoxelCollision* GetVoxelCollision() { return voxel_collision; }
+
+private:
+    // Debris-voxel collision system
+    ChunkedVoxelCollision* voxel_collision = nullptr;
+    VoxelWorld* voxel_world = nullptr;
 };

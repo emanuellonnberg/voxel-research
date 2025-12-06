@@ -1,4 +1,6 @@
 #include "BulletEngine.h"
+#include "ChunkedVoxelCollision.h"
+#include "VoxelWorld.h"
 #include <btBulletDynamicsCommon.h>
 #include <BulletCollision/CollisionShapes/btConvexHullShape.h>
 #include <iostream>
@@ -76,6 +78,13 @@ bool BulletEngine::Initialize() {
 void BulletEngine::Shutdown() {
     if (!initialized) {
         return;
+    }
+
+    // Clean up voxel collision system
+    if (voxel_collision) {
+        voxel_collision->Shutdown();
+        delete voxel_collision;
+        voxel_collision = nullptr;
     }
 
     // Remove all rigid bodies
@@ -417,4 +426,42 @@ const char* BulletEngine::GetEngineName() const {
 
 const char* BulletEngine::GetEngineVersion() const {
     return "3.25";  // Bullet3 version
+}
+
+// ===== Debris-Voxel Collision System =====
+
+void BulletEngine::SetVoxelWorld(VoxelWorld* world) {
+    voxel_world = world;
+
+    // Initialize collision system if we have both world and physics
+    if (voxel_world && dynamics_world && !voxel_collision) {
+        voxel_collision = new ChunkedVoxelCollision(10.0f);  // 10m chunks
+        voxel_collision->Initialize(dynamics_world, voxel_world);
+        std::cout << "[BulletEngine] Voxel collision system initialized\n";
+    }
+}
+
+void BulletEngine::BuildVoxelCollision() {
+    if (!voxel_collision || !voxel_world) {
+        std::cerr << "[BulletEngine] ERROR: Cannot build voxel collision - not initialized!\n";
+        return;
+    }
+
+    std::cout << "[BulletEngine] Building voxel collision meshes...\n";
+    voxel_collision->BuildChunksForWorld();
+}
+
+void BulletEngine::OnVoxelsChanged(const std::vector<Vector3>& positions) {
+    if (!voxel_collision) return;
+
+    // Mark affected chunks dirty
+    for (const auto& pos : positions) {
+        voxel_collision->MarkChunkDirty(pos);
+    }
+}
+
+void BulletEngine::UpdateVoxelCollision(float deltaTime) {
+    if (voxel_collision) {
+        voxel_collision->Update(deltaTime);
+    }
 }

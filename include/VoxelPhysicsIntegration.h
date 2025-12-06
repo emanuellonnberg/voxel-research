@@ -12,6 +12,17 @@ class ParticleSystem;
 class ImpactDetector;
 
 /**
+ * Collision groups for filtering (Week 5 Day 29, Week 13 Day 45+)
+ */
+enum CollisionGroup {
+    COL_GROUND = 1 << 0,  // 0x0001 - Ground/static geometry
+    COL_DEBRIS = 1 << 1,  // 0x0002 - Falling debris
+    COL_UNITS  = 1 << 2,  // 0x0004 - Game units/characters
+    COL_VOXELS = 1 << 3,  // 0x0008 - Voxel collision meshes (Week 13 Day 45+)
+    COL_PROJECTILES = 1 << 4  // 0x0010 - Projectiles
+};
+
+/**
  * VoxelPhysicsIntegration
  *
  * Bridges structural analysis and physics simulation by converting
@@ -122,15 +133,6 @@ public:
     void SetMaterialVelocitiesEnabled(bool enable);
 
     // ===== Week 5 Day 29: Optimization =====
-
-    /**
-     * Collision groups for filtering
-     */
-    enum CollisionGroup {
-        COL_GROUND = 1 << 0,  // 0x0001 - Ground/static geometry
-        COL_DEBRIS = 1 << 1,  // 0x0002 - Falling debris
-        COL_UNITS  = 1 << 2   // 0x0004 - Game units/characters
-    };
 
     /**
      * Enable optimized collision filtering

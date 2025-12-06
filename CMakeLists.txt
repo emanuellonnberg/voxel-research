@@ -138,6 +138,10 @@ add_library(VoxelCore
     src/physics/PhysicsProxySimulator.cpp
     $<$<BOOL:${USE_BULLET}>:src/physics/ImpactDetector.cpp>
 
+    # Debris-Voxel Collision (Week 13 Day 45+)
+    $<$<BOOL:${USE_BULLET}>:src/physics/VoxelCollisionChunk.cpp>
+    $<$<BOOL:${USE_BULLET}>:src/physics/ChunkedVoxelCollision.cpp>
+
     # Testing/Benchmarking (Week 13 Day 45)
     src/testing/PerformanceBenchmark.cpp
 )
@@ -276,6 +280,12 @@ if(BUILD_EXAMPLES)
     )
     target_link_libraries(TestJobSystemReinit VoxelCore)
 
+    # Week 13 Day 45+: Debris-voxel collision test
+    add_executable(TestDebrisCollision
+        examples/test_debris_collision.cpp
+    )
+    target_link_libraries(TestDebrisCollision VoxelCore)
+
     # Define USE_BULLET for examples if enabled
     if(USE_BULLET)
         target_compile_definitions(IntegrationDemo PRIVATE USE_BULLET)
@@ -285,6 +295,7 @@ if(BUILD_EXAMPLES)
         target_compile_definitions(ShowcaseDemo PRIVATE USE_BULLET)
         target_compile_definitions(AnalyzerComparison PRIVATE USE_BULLET)
         target_compile_definitions(Week13Benchmark PRIVATE USE_BULLET)
+        target_compile_definitions(TestDebrisCollision PRIVATE USE_BULLET)
     endif()
 endif()
 
