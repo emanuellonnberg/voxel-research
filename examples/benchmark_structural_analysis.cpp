@@ -14,11 +14,14 @@
 #include "VoxelWorld.h"
 #include "VoxelUtils.h"
 #include "Material.h"
+#include <algorithm>
 #include <chrono>
-#include <iostream>
-#include <iomanip>
-#include <vector>
+#include <cstring>
 #include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <vector>
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -185,7 +188,7 @@ void SaveResultsCSV(const std::vector<BenchmarkResult>& results, const std::stri
     std::cout << "\nResults saved to " << filename << "\n";
 }
 
-int main() {
+int main(int argc, char** argv) {
     std::cout << "==================================================\n";
     std::cout << "  StructuralAnalyzer Performance Benchmark Suite\n";
     std::cout << "  Day 20: Week 4 Final Integration Testing\n";
@@ -195,7 +198,17 @@ int main() {
 
     // Setup analyzer with optimal parameters
     StructuralAnalyzer analyzer;
-    analyzer.LoadParameters("../config/optimal_params.ini");
+    std::string config_path = "../config/optimal_params.ini";
+    if (argc > 1 && argv[1] && std::strlen(argv[1]) > 0) {
+        config_path = argv[1];
+    }
+
+    if (!analyzer.LoadParameters(config_path)) {
+        std::cerr << "Failed to load parameters from " << config_path << "\n";
+        return 1;
+    }
+
+    std::cout << "Using parameter file: " << config_path << "\n";
 
     float voxel_size = 0.05f;
     uint8_t brick_id = MaterialDatabase::BRICK;

@@ -1,19 +1,24 @@
 #include "VoxelWorld.h"
 #include <algorithm>
 #include <cmath>
+#include <mutex>          // For std::unique_lock
+#include <shared_mutex>   // For std::shared_lock
 
 VoxelWorld::VoxelWorld(float voxel_size)
-    : voxel_size(voxel_size), surface_cache_dirty(true)
-{
+    : voxel_size(voxel_size)
+    , edit_version(0)
+    , surface_cache_dirty(true) {
 }
 
 bool VoxelWorld::HasVoxel(const Vector3& position) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
     Vector3 snapped = SnapToGrid(position);
     auto it = voxels.find(snapped);
     return it != voxels.end() && it->second.IsSolid();
 }
 
 Voxel VoxelWorld::GetVoxel(const Vector3& position) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
     Vector3 snapped = SnapToGrid(position);
     auto it = voxels.find(snapped);
     if (it != voxels.end()) {
@@ -23,12 +28,17 @@ Voxel VoxelWorld::GetVoxel(const Vector3& position) const {
 }
 
 void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
+    std::unique_lock<std::shared_mutex> lock(voxel_mutex);
     Vector3 snapped = SnapToGrid(position);
 
-    bool was_solid = HasVoxel(snapped);
+    // Check if voxel was solid (avoid nested lock by checking directly)
+    auto it = voxels.find(snapped);
+    bool was_solid = (it != voxels.end() && it->second.IsSolid());
+    bool changed = false;
 
     if (voxel.IsSolid()) {
         voxels[snapped] = voxel;
+        changed = true;
 
         // Update spatial hash if enabled (only insert if newly solid)
         if (spatial_hash && !was_solid) {
@@ -42,17 +52,27 @@ void VoxelWorld::SetVoxel(const Vector3& position, const Voxel& voxel) {
         if (spatial_hash && was_solid) {
             spatial_hash->Remove(snapped);
         }
+        if (was_solid) {
+            changed = true;
+        }
     }
 
     // Invalidate surface cache for this voxel and neighbors
     InvalidateSurfaceAt(snapped);
+
+    if (changed) {
+        ++edit_version;
+    }
 }
 
 void VoxelWorld::RemoveVoxel(const Vector3& position) {
+    std::unique_lock<std::shared_mutex> lock(voxel_mutex);
     Vector3 snapped = SnapToGrid(position);
 
-    bool was_solid = HasVoxel(snapped);
-    voxels.erase(snapped);
+    // Check if voxel was solid (avoid nested lock by checking directly)
+    auto it = voxels.find(snapped);
+    bool was_solid = (it != voxels.end() && it->second.IsSolid());
+    size_t removed = voxels.erase(snapped);
 
     // Remove from spatial hash if enabled
     if (spatial_hash && was_solid) {
@@ -61,9 +81,18 @@ void VoxelWorld::RemoveVoxel(const Vector3& position) {
 
     // Invalidate surface cache for this voxel and neighbors
     InvalidateSurfaceAt(snapped);
+
+    if (removed > 0) {
+        ++edit_version;
+    }
 }
 
 void VoxelWorld::Clear() {
+    // IMPORTANT: Always acquire locks in consistent order: voxel_mutex THEN surface_mutex
+    // to avoid deadlock (detected by ThreadSanitizer)
+    std::unique_lock<std::shared_mutex> voxel_lock(voxel_mutex);
+    std::unique_lock<std::shared_mutex> surface_lock(surface_mutex);
+
     voxels.clear();
     surface_cache.clear();
     surface_cache_dirty = true;
@@ -72,9 +101,18 @@ void VoxelWorld::Clear() {
     if (spatial_hash) {
         spatial_hash->Clear();
     }
+
+    ++edit_version;
+}
+
+size_t VoxelWorld::GetVoxelCount() const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+    return voxels.size();
 }
 
 std::vector<Vector3> VoxelWorld::GetAllVoxelPositions() const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     std::vector<Vector3> positions;
     positions.reserve(voxels.size());
 
@@ -89,6 +127,8 @@ std::vector<Vector3> VoxelWorld::GetAllVoxelPositions() const {
 
 std::vector<Vector3> VoxelWorld::GetNeighbors(const Vector3& position,
                                                Connectivity connectivity) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     std::vector<Vector3> neighbors;
     const auto& offsets = GetNeighborOffsets(connectivity);
 
@@ -96,7 +136,9 @@ std::vector<Vector3> VoxelWorld::GetNeighbors(const Vector3& position,
 
     for (const auto& offset : offsets) {
         Vector3 neighbor_pos = snapped + offset * voxel_size;
-        if (HasVoxel(neighbor_pos)) {
+        // Check directly instead of calling HasVoxel to avoid nested lock
+        auto it = voxels.find(neighbor_pos);
+        if (it != voxels.end() && it->second.IsSolid()) {
             neighbors.push_back(neighbor_pos);
         }
     }
@@ -106,13 +148,17 @@ std::vector<Vector3> VoxelWorld::GetNeighbors(const Vector3& position,
 
 int VoxelWorld::CountNeighbors(const Vector3& position,
                                Connectivity connectivity) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     const auto& offsets = GetNeighborOffsets(connectivity);
     Vector3 snapped = SnapToGrid(position);
 
     int count = 0;
     for (const auto& offset : offsets) {
         Vector3 neighbor_pos = snapped + offset * voxel_size;
-        if (HasVoxel(neighbor_pos)) {
+        // Check directly instead of calling HasVoxel to avoid nested lock
+        auto it = voxels.find(neighbor_pos);
+        if (it != voxels.end() && it->second.IsSolid()) {
             count++;
         }
     }
@@ -121,6 +167,8 @@ int VoxelWorld::CountNeighbors(const Vector3& position,
 }
 
 std::vector<Vector3> VoxelWorld::GetVoxelsInRadius(const Vector3& center, float radius) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     // Use spatial hash if enabled (much faster for large structures)
     if (spatial_hash) {
         return spatial_hash->QueryRadius(center, radius);
@@ -143,6 +191,8 @@ std::vector<Vector3> VoxelWorld::GetVoxelsInRadius(const Vector3& center, float 
 }
 
 std::vector<Vector3> VoxelWorld::GetVoxelsInBox(const Vector3& min, const Vector3& max) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     // Use spatial hash if enabled (much faster for large structures)
     if (spatial_hash) {
         return spatial_hash->QueryBox(min, max);
@@ -157,7 +207,9 @@ std::vector<Vector3> VoxelWorld::GetVoxelsInBox(const Vector3& min, const Vector
         for (float y = min_snapped.y; y <= max_snapped.y; y += voxel_size) {
             for (float z = min_snapped.z; z <= max_snapped.z; z += voxel_size) {
                 Vector3 pos(x, y, z);
-                if (HasVoxel(pos)) {
+                // Check directly instead of calling HasVoxel to avoid nested lock
+                auto it = voxels.find(pos);
+                if (it != voxels.end() && it->second.IsSolid()) {
                     result.push_back(pos);
                 }
             }
@@ -170,6 +222,8 @@ std::vector<Vector3> VoxelWorld::GetVoxelsInBox(const Vector3& min, const Vector
 std::vector<Vector3> VoxelWorld::Raycast(const Vector3& origin,
                                          const Vector3& direction,
                                          float max_distance) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     std::vector<Vector3> hits;
 
     // DDA (Digital Differential Analyzer) raycast algorithm
@@ -183,9 +237,10 @@ std::vector<Vector3> VoxelWorld::Raycast(const Vector3& origin,
     Vector3 current = origin;
 
     for (int i = 0; i < max_steps; i++) {
-        if (HasVoxel(current)) {
-            Vector3 snapped = SnapToGrid(current);
-
+        // Check directly instead of calling HasVoxel to avoid nested lock
+        Vector3 snapped = SnapToGrid(current);
+        auto it = voxels.find(snapped);
+        if (it != voxels.end() && it->second.IsSolid()) {
             // Avoid duplicate hits (multiple steps in same voxel)
             if (hits.empty() || hits.back() != snapped) {
                 hits.push_back(snapped);
@@ -245,10 +300,13 @@ const std::vector<Vector3>& VoxelWorld::GetNeighborOffsets(Connectivity connecti
 // Surface detection methods
 
 bool VoxelWorld::IsSurfaceVoxel(const Vector3& position) const {
+    std::shared_lock<std::shared_mutex> lock(voxel_mutex);
+
     Vector3 snapped = SnapToGrid(position);
 
-    // Not a voxel = not surface
-    if (!HasVoxel(snapped)) {
+    // Not a voxel = not surface (check directly to avoid nested lock)
+    auto it = voxels.find(snapped);
+    if (it == voxels.end() || !it->second.IsSolid()) {
         return false;
     }
 
@@ -256,7 +314,9 @@ bool VoxelWorld::IsSurfaceVoxel(const Vector3& position) const {
     const auto& offsets = GetNeighborOffsets(Connectivity::SIX);
     for (const auto& offset : offsets) {
         Vector3 neighbor_pos = snapped + (offset * voxel_size);
-        if (!HasVoxel(neighbor_pos)) {
+        // Check directly instead of calling HasVoxel to avoid nested lock
+        auto neighbor_it = voxels.find(neighbor_pos);
+        if (neighbor_it == voxels.end() || !neighbor_it->second.IsSolid()) {
             return true;  // Has at least one air neighbor
         }
     }
@@ -264,33 +324,67 @@ bool VoxelWorld::IsSurfaceVoxel(const Vector3& position) const {
     return false;  // Completely surrounded by solid voxels
 }
 
-const std::unordered_set<Vector3, Vector3::Hash>& VoxelWorld::GetSurfaceVoxels() {
+std::unordered_set<Vector3, Vector3::Hash> VoxelWorld::GetSurfaceVoxels() const {
+    // Double-checked locking pattern for lazy cache update
+    {
+        std::shared_lock<std::shared_mutex> lock(surface_mutex);
+        if (!surface_cache_dirty) {
+            return surface_cache;  // Return copy while holding lock
+        }
+    }
+
+    // Cache is dirty - need to update
+    // IMPORTANT: Acquire voxel_mutex FIRST, then surface_mutex (consistent lock order)
+    std::shared_lock<std::shared_mutex> voxel_lock(voxel_mutex);
+    std::unique_lock<std::shared_mutex> surface_lock(surface_mutex);
+
+    // Check again in case another thread updated while we waited for locks
     if (surface_cache_dirty) {
-        UpdateSurfaceCache();
+        UpdateSurfaceCacheUnsafe();  // Called with both locks already held
         surface_cache_dirty = false;
     }
-    return surface_cache;
+    return surface_cache;  // Return copy while holding lock
 }
 
 void VoxelWorld::InvalidateSurfaceCache() {
+    std::unique_lock<std::shared_mutex> lock(surface_mutex);
     surface_cache_dirty = true;
 }
 
-void VoxelWorld::UpdateSurfaceCache() const {
+void VoxelWorld::UpdateSurfaceCacheUnsafe() const {
+    // Called from GetSurfaceVoxels() which already holds BOTH voxel_mutex and surface_mutex
+    // "Unsafe" means caller must hold locks - don't call this directly
+
     surface_cache.clear();
 
-    // Check all voxels to see if they're surface
+    // Check all voxels to see if they're surface (inline logic to avoid nested locks)
+    const auto& offsets = GetNeighborOffsets(Connectivity::SIX);
     for (const auto& pair : voxels) {
-        if (IsSurfaceVoxel(pair.first)) {
-            surface_cache.insert(pair.first);
+        const Vector3& pos = pair.first;
+
+        // Check if this voxel has any air neighbors
+        bool is_surface = false;
+        for (const auto& offset : offsets) {
+            Vector3 neighbor_pos = pos + (offset * voxel_size);
+            auto neighbor_it = voxels.find(neighbor_pos);
+            if (neighbor_it == voxels.end() || !neighbor_it->second.IsSolid()) {
+                is_surface = true;
+                break;
+            }
+        }
+
+        if (is_surface) {
+            surface_cache.insert(pos);
         }
     }
 }
 
 void VoxelWorld::InvalidateSurfaceAt(const Vector3& position) {
+    // Called from SetVoxel/RemoveVoxel which already hold voxel_mutex
     // When a voxel changes, it and its neighbors might change surface status
     // For simplicity, mark entire cache as dirty
     // (More optimized version would only update affected voxels)
+    std::unique_lock<std::shared_mutex> lock(surface_mutex);
     surface_cache_dirty = true;
 
     // Optional: Partial cache update (more complex but faster for small changes)
@@ -310,6 +404,8 @@ void VoxelWorld::InvalidateSurfaceAt(const Vector3& position) {
 // Spatial hashing methods
 
 void VoxelWorld::EnableSpatialHashing(float cell_size) {
+    std::unique_lock<std::shared_mutex> lock(voxel_mutex);
+
     if (!spatial_hash) {
         spatial_hash = std::make_unique<SpatialHash>(cell_size);
 
@@ -323,5 +419,6 @@ void VoxelWorld::EnableSpatialHashing(float cell_size) {
 }
 
 void VoxelWorld::DisableSpatialHashing() {
+    std::unique_lock<std::shared_mutex> lock(voxel_mutex);
     spatial_hash.reset();
 }

@@ -55,8 +55,19 @@ public:
      * - Position: cluster center of mass
      * - Mass: based on voxel count (voxel_density kg/m³)
      * - Shape: convex hull from voxel positions
+     *
+     * Week 13 Day 43: Automatically uses parallel processing if JobSystem is available
      */
     int SpawnDebris(const std::vector<VoxelCluster>& clusters);
+
+    /**
+     * Spawn debris using serial implementation (for testing/fallback)
+     * @param clusters Failed clusters from StructuralAnalyzer
+     * @return Number of new debris bodies spawned
+     *
+     * Week 13 Day 43: Serial version for performance comparison
+     */
+    int SpawnDebrisSerial(const std::vector<VoxelCluster>& clusters);
 
     /**
      * Update physics simulation for all debris
@@ -147,6 +158,9 @@ public:
      * Week 5 Day 29: Distance-based cleanup
      */
     int RemoveDebrisBeyondDistance(const Vector3& position, float max_distance);
+    void SetSettledCleanupDelay(float seconds);
+    void SetSettledVisualLifetime(float seconds);
+    int GetSettledVisualCount() const { return static_cast<int>(settled_visuals.size()); }
 
     // ===== Queries =====
 
@@ -154,6 +168,12 @@ public:
      * Get number of active debris bodies
      */
     int GetDebrisCount() const;
+
+    /**
+     * Collect transforms/material IDs for rendering debris
+     */
+    void GetDebrisRenderData(std::vector<Transform>& out_transforms,
+                             std::vector<uint8_t>& out_material_ids) const;
 
     /**
      * Check if a cluster has already been spawned
@@ -246,12 +266,14 @@ private:
         CollisionShapeHandle shape;      // Collision shape handle
         uint32_t cluster_id;             // Original cluster ID
         int voxel_count;                 // Number of voxels in cluster
+        uint8_t material_id;             // Dominant material ID
         DebrisState state;               // Current state
         float time_below_threshold;      // Time spent below velocity thresholds
         float spawn_time;                // Time when debris was spawned (Week 5 Day 29)
 
-        DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count, float time = 0.0f)
-            : body(b), shape(s), cluster_id(id), voxel_count(count),
+        DebrisBody(PhysicsBodyHandle b, CollisionShapeHandle s, uint32_t id, int count,
+                   float time, uint8_t mat_id)
+            : body(b), shape(s), cluster_id(id), voxel_count(count), material_id(mat_id),
               state(DebrisState::ACTIVE), time_below_threshold(0.0f), spawn_time(time) {}
     };
 
@@ -331,4 +353,21 @@ private:
      * Week 5 Day 26: Settling detection
      */
     void UpdateDebrisStates(float deltaTime);
+
+    int CleanupSettledDebris();
+    void RemoveExpiredSettledVisuals();
+    void CreateGroundPlane();
+
+    struct SettledDebrisVisual {
+        Transform transform;
+        uint8_t material_id;
+        uint32_t cluster_id;
+        float settled_time;
+    };
+
+    std::vector<SettledDebrisVisual> settled_visuals;
+    float settled_cleanup_delay;
+    float settled_visual_lifetime;
+    PhysicsBodyHandle ground_body = nullptr;
+    CollisionShapeHandle ground_shape = nullptr;
 };

@@ -6,6 +6,17 @@
 #include <vector>
 #include <string>
 
+#ifdef RENDERING_ENABLED
+#include <glad/gl.h>
+#include <GLFW/glfw3.h>
+#endif
+
+#ifdef RENDERING_ENABLED
+using RendererHandle = GLuint;
+#else
+using RendererHandle = unsigned int;
+#endif
+
 /**
  * VoxelRenderer - OpenGL-based voxel rendering
  *
@@ -37,6 +48,10 @@ public:
 
     // Rendering
     void Render(const Camera& camera, float aspect_ratio);
+    void UpdateDebrisInstances(const std::vector<Vector3>& positions,
+                               const std::vector<Color>& colors,
+                               float voxel_size);
+    void ClearDebrisInstances();
 
     // Settings
     void SetWireframeMode(bool enabled) { wireframe_mode = enabled; }
@@ -47,28 +62,39 @@ public:
     float GetLastFrameTime() const { return last_frame_time_ms; }
 
 private:
-    // OpenGL object handles (would be GLuint in real OpenGL)
-    unsigned int vao;  // Vertex Array Object
-    unsigned int vbo_cube;  // Cube geometry VBO
-    unsigned int vbo_instances;  // Instance data VBO
-    unsigned int ebo;  // Element Buffer Object (indices)
-    unsigned int shader_program;  // Shader program
+    // OpenGL object handles
+    RendererHandle vao_static;             // Static VAO
+    RendererHandle vao_dynamic;            // Dynamic VAO
+    RendererHandle vbo_cube;               // Cube geometry VBO
+    RendererHandle vbo_instance_matrices;  // Static instance transform VBO
+    RendererHandle vbo_instance_colors;    // Static instance color VBO
+    RendererHandle vbo_dynamic_matrices;   // Dynamic instance transform VBO
+    RendererHandle vbo_dynamic_colors;     // Dynamic instance color VBO
+    RendererHandle ebo;                    // Element Buffer Object (indices)
+    RendererHandle shader_program;         // Shader program
+    int index_count;
 
     // Render data
-    std::vector<float> instance_matrices;  // 4x4 matrices for each voxel
-    std::vector<float> instance_colors;    // RGB colors for each voxel
+    std::vector<float> instance_matrices;  // 4x4 matrices for static voxels
+    std::vector<float> instance_colors;    // RGB colors for static voxels
+    std::vector<float> dynamic_matrices;   // 4x4 matrices for debris
+    std::vector<float> dynamic_colors;     // RGB colors for debris
     int rendered_voxel_count;
+    int dynamic_instance_count;
 
     // Settings
     bool wireframe_mode;
     bool lighting_enabled;
     float last_frame_time_ms;
+    double last_render_timestamp;
 
     // Helper methods
-    void CreateCubeGeometry();
-    void CreateShaders();
-    std::string LoadShaderSource(const char* vertex_src, const char* fragment_src);
-    void SetupInstancedRendering();
+    bool CreateCubeGeometry();
+    bool CreateShaders();
+    bool SetupInstancedRendering();
+    void UploadStaticInstances();
+    void UploadDynamicInstances();
+    void DestroyResources();
 };
 
 /**
@@ -90,8 +116,12 @@ public:
 
     // Input
     bool IsKeyPressed(int key) const;
+    bool IsMouseButtonPressed(int button) const;
     void GetCursorPos(double* xpos, double* ypos) const;
     void SetCursorMode(bool captured);
+    void OnFramebufferResized(int new_width, int new_height);
+    void Close();
+    bool IsCursorCaptured() const { return cursor_captured; }
 
     // Getters
     int GetWidth() const { return width; }
@@ -102,9 +132,16 @@ public:
     void UpdateDeltaTime();
 
 private:
-    void* window_handle;  // Would be GLFWwindow* in real implementation
+#ifdef RENDERING_ENABLED
+    GLFWwindow* window_handle;
+#else
+    void* window_handle;  // Stub placeholder
+#endif
     int width, height;
     float delta_time;
     float last_frame_time;
     bool cursor_captured;
+    std::string title;
+    bool glfw_initialized;
+    bool should_close;
 };

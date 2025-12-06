@@ -6,6 +6,7 @@ lib/
 
 # IDE files
 .vscode/
+.vs/
 .idea/
 *.swp
 *.swo
@@ -37,3 +38,11 @@ Thumbs.db
 # Dependencies (if vendored)
 external/
 _deps/
+build-tests/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+build_tsan/

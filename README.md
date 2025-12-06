@@ -1,6 +1,48 @@
 # Voxel Destruction Engine
 
-An 8-week prototype implementing realistic voxel-based structural destruction with physics simulation.
+A production-ready voxel-based destruction system with structural integrity analysis and realistic physics simulation. Built in an 8-week development sprint.
+
+[![Tests](https://img.shields.io/badge/tests-401%20passing-brightgreen)]() [![Performance](https://img.shields.io/badge/analysis-<500ms-blue)]() [![Physics](https://img.shields.io/badge/physics-30%2B%20FPS-blue)]()
+
+## Quick Start
+
+```bash
+# Build
+git submodule update --init --recursive
+mkdir build && cd build
+cmake ..
+cmake --build . -j4
+
+# Run tests
+./bin/VoxelTests                # 401 unit tests
+./bin/ScenarioTests             # 5 integration scenarios
+./bin/ShowcaseDemo              # Complete feature demonstration
+
+# Run examples
+./bin/PerformanceProfiling      # Performance benchmarks
+./bin/IntegrationDemo           # 4 destruction scenarios
+```
+
+**First Time?** See **[Quick Start Guide](docs/QUICK_START.md)** for a 15-minute tutorial.
+
+**Looking for Examples?** See **[Code Examples](docs/EXAMPLES.md)** for common use cases.
+
+---
+
+## What is This?
+
+A complete voxel destruction engine featuring:
+
+- ✅ **Structural Integrity Analysis** - Determines which voxels should collapse (< 500ms)
+- ✅ **Physics Simulation** - Realistic debris behavior with Bullet Physics (30+ FPS)
+- ✅ **Material System** - Wood, concrete, brick with unique properties
+- ✅ **Turn-Based Integration** - Perfect for tactical/strategy games
+- ✅ **Performance Optimized** - Handles 50K+ voxel structures
+- ✅ **Production Ready** - 401 passing tests, comprehensive documentation
+
+**Use Cases:** XCOM-style tactical games, destructible environments, siege mechanics, realistic building collapse
+
+---
 
 ## Project Structure
 
@@ -21,7 +63,7 @@ voxel-research/
 
 ## Features
 
-### Current (Week 5 Day 21)
+### Current (Week 8 Day 36)
 - ✅ Project structure
 - ✅ CMake build system
 - ✅ Vector3 math library (29 tests)
@@ -37,8 +79,12 @@ voxel-research/
 - ✅ Voxel clustering and connected components (18 tests)
 - ✅ Structural stability analysis system (26 tests)
 - ✅ Support chain analysis and ground detection
+- ✅ Per-material support-distance heuristics (weak materials collapse faster when far from ground)
+- ✅ Per-material stack-depth heuristics (voxels require direct downward support before spanning)
+- ✅ Load-redistribution mode (per-material load ratios, capacity scaling, iterative balancing + telemetry)
 - ✅ Stability metrics (COM, tip risk, support area)
 - ✅ **Structural integrity analyzer with spring system (49 tests)**
+- ✅ **Max-Flow structural analyzer with Dinic's algorithm (21 tests, 23x faster)**
 - ✅ **Displacement-based failure detection**
 - ✅ **Mass calculation via raycasting with caching**
 - ✅ **Performance profiling (per-phase timing)**
@@ -55,6 +101,7 @@ voxel-research/
   - **Early termination detection (9x fewer iterations)**
 - ✅ **Day 17: Parameter tuning system**
   - **INI file save/load for parameters**
+  - **Structural mode selection + load redistribution knobs persisted via config**
   - **Parameter sensitivity analysis tools**
   - **Auto-tuning with grid search**
   - **Optimal parameter configurations (default + optimal)**
@@ -87,44 +134,368 @@ voxel-research/
   - **Complete platform flexibility (Bullet, PhysX, custom)**
   - **11 comprehensive physics tests (all passing)**
   - **Works in container (no external dependencies)**
+- ✅ **Week 5 Day 22: Bullet Physics Integration**
+  - **Bullet3 added as git submodule (third_party/bullet3)**
+  - **BulletEngine with REAL collision detection**
+  - **Rigid body dynamics (gravity, forces, impulses, rotation)**
+  - **Collision shapes (box, sphere, convex hull)**
+  - **Raycasting with hit detection**
+  - **Ground collision and stacking**
+  - **8 BulletEngine tests (all passing)**
+  - **Production-ready physics (cross-platform, zlib license)**
+- ✅ **Week 5 Day 23: VoxelPhysicsIntegration**
+  - **Bridge between StructuralAnalyzer and Physics Engine**
+  - **Converts VoxelCluster → RigidBody with collision shapes**
+  - **Automatic debris spawning from failed clusters**
+  - **Convex hull generation from voxel positions**
+  - **Mass calculation based on voxel count and density**
+  - **Debris lifecycle management (spawn, update, cleanup)**
+  - **Out-of-bounds debris removal**
+  - **16 comprehensive tests (all passing)**
+  - **Engine-agnostic (works with Mock, Bullet, PhysX)**
+- ✅ **Week 5 Day 24: Integration Demos & Testing**
+  - **End-to-end integration test suite (11 comprehensive tests)**
+  - **Complete pipeline validation: VoxelWorld → StructuralAnalyzer → VoxelPhysicsIntegration → Physics Engine**
+  - **IntegrationDemo executable with 4 scenarios:**
+    - **Demo 1: Tower Collapse (10-voxel tower destruction)**
+    - **Demo 2: Bridge Destruction (span failure simulation)**
+    - **Demo 3: Wall Breakthrough (partial damage analysis)**
+    - **Demo 4: Performance Benchmark (15x15x5 structure = 1125 voxels)**
+  - **Performance metrics and profiling output**
+  - **Stress testing with large structures**
+  - **Material variation testing**
+  - **Edge case validation (empty world, single voxel, etc.)**
+  - **Repeated analysis consistency tests**
+  - **All integration tests passing with Bullet Physics**
+- ✅ **Week 5 Day 24B: Physics Proxy Structural Mode**
+  - **PhysicsProxySimulator builds a temporary Bullet scene around damaged nodes and runs a burst simulation**
+  - **Configurable selection radius, body count, simulation time, timestep, and failure thresholds (INI-driven)**
+  - **StructuralAnalyzer reports proxy telemetry via `AnalysisResult` and marks returned node IDs as failed clusters**
+  - **Automatic heuristic fallback when Bullet is unavailable plus regression tests for proxy selection**
+  - **NEW:** Smarter proxy selection prioritizes overloaded nodes, quantizes picks to a grid, and extends along support chains via new INI knobs (`proxy_selection_grid_size`, load-ratio weights, and `proxy_support_chain_depth`). Dedicated `PhysicsProxySelectionTest` cases lock the behavior down.
+  - **NEW:** Proxy result telemetry now captures per-node peak drop, speed, and contact impulses so gameplay or tooling can inspect exactly how each voxel behaved during the Bullet burst.
+  - **NEW:** Added a reusable Bullet body pool for proxy voxels—burst builds recycle rigid bodies and expose `bodies_created` / `bodies_reused` stats so we can verify caching wins in tests. Optional impulse-history logging (`proxy_record_impulse_history`) lets designers inspect per-contact samples when needed.
+- ✅ **Week 5 Day 25: Material-Specific Fracture Behaviors**
+  - **VoxelFragmentation system for realistic breakage patterns:**
+    - **Wood: Splits into 3-6 elongated splinters (along grain)**
+    - **Concrete: Fractures into 5-10 irregular chunks (Voronoi-like)**
+    - **Brick: Breaks into regular masonry units (grid-based)**
+    - **Glass: Shatters into many small shards (planned)**
+  - **Material-specific initial velocities:**
+    - **Wood: Tumbles with medium spin**
+    - **Concrete: Falls with randomness and low spin**
+    - **Brick: Similar to concrete but more controlled**
+  - **VoxelPhysicsIntegration enhancements:**
+    - **Automatic cluster fragmentation before debris spawn**
+    - **ConfigurableFragmentationEnabled/MaterialVelocitiesEnabled flags**
+    - **ApplyMaterialVelocity() for realistic motion**
+  - **14 fragmentation tests (all passing)**
+  - **Enabled by default for realistic destruction**
+- ✅ **Week 5 Day 26: Advanced Settling Detection**
+  - **Debris state machine (ACTIVE → SETTLING → SETTLED):**
+    - **ACTIVE: Moving debris with velocity above threshold**
+    - **SETTLING: Slowing down but not yet stable**
+    - **SETTLED: At rest, candidate for optimization/removal**
+  - **Velocity-based settling detection:**
+    - **Linear velocity threshold (default: 0.1 m/s)**
+    - **Time-based confirmation (default: 0.5 seconds below threshold)**
+    - **Continuous monitoring during simulation**
+  - **Settling queries:**
+    - **GetSettledDebrisCount() - Count debris at rest**
+    - **GetActiveDebrisCount() - Count moving debris**
+    - **ConvertSettledToStatic() - Optimize settled debris (state tracking)**
+  - **Configuration API:**
+    - **SetSettlingThresholds() - Customize detection parameters**
+    - **Automatic state updates during Step()**
+  - **6 settling detection tests (all passing)**
+  - **Foundation for future optimizations (culling, sleep, removal)**
+- ✅ **Week 5 Day 27: Rubble Generation System**
+  - **RubbleSystem for tracking settled debris as static objects:**
+    - **RubbleObject struct (position, height, radius, material)**
+    - **AddRubble() - Add settled debris to rubble tracking**
+    - **RemoveRubbleNear() - Cleanup rubble in radius**
+    - **ClearAll() - Remove all rubble**
+  - **Cover height queries for gameplay:**
+    - **GetCoverHeight() - Calculate average rubble height at position**
+    - **HasCover() - Quick boolean check for cover availability**
+    - **GetRubbleNearby() - Find rubble within radius**
+    - **GetAllRubble() - Get complete rubble list**
+  - **Use cases:**
+    - **Cover system for AI/player positioning**
+    - **Navigation obstacle data for pathfinding**
+    - **Performance optimization (convert settled debris to static)**
+    - **Environmental effects and rendering**
+  - **14 rubble system tests (all passing)**
+  - **Standalone system ready for integration**
+- ✅ **Week 5 Day 28: Particle Effects System**
+  - **Particle struct with physics properties:**
+    - **Position, velocity, color (RGBA), size, lifetime, age**
+    - **IsAlive() and GetFade() for lifecycle management**
+  - **ParticleSystem class for visual effects:**
+    - **Spawn() - Create particles with customizable properties**
+    - **Update() - Physics simulation (gravity, air resistance, aging)**
+    - **Automatic cleanup of dead particles**
+    - **Max particle limit for performance control**
+  - **Material-specific impact effects:**
+    - **SpawnConcreteImpact() - Dust clouds + rock chips**
+    - **SpawnWoodImpact() - Splinters + sawdust (elongated, floaty)**
+    - **SpawnBrickImpact() - Reddish dust + brick pieces**
+    - **Intensity parameter scales particle count**
+  - **Environmental effects:**
+    - **SpawnDustCloud() - Large ambient dust for collapse epicenters**
+    - **Upward-biased velocity for realistic dust behavior**
+  - **Configuration options:**
+    - **Adjustable gravity and air resistance**
+    - **Particle fade-out over lifetime (alpha blending)**
+  - **ImpactDetector system (Bullet Physics integration):**
+    - **Automatic collision detection via Bullet callbacks**
+    - **Impact event tracking (position, normal, impulse, material)**
+    - **Configurable impulse threshold for filtering**
+    - **Body-to-material mapping for accurate effects**
+    - **Logarithmic intensity scaling from collision force**
+    - **Automatic particle spawning on debris impacts**
+  - **VoxelPhysicsIntegration enhancements:**
+    - **EnableImpactDetection() - Activate particle spawning**
+    - **Material registration for debris bodies**
+    - **Automatic detection during Step() when enabled**
+    - **Zero overhead when disabled**
+  - **24 comprehensive tests (all passing)**
+  - **Complete physics-to-visuals pipeline ready!**
+- ✅ **Week 5 Day 29: Performance Optimizations**
+  - **Collision filtering system:**
+    - **CollisionGroup enum (GROUND, DEBRIS, UNITS)**
+    - **SetCollisionFiltering() - Enable/disable debris-debris collisions**
+    - **Automatic collision mask application during spawn**
+    - **~2-3x performance improvement with debris-debris collisions disabled**
+  - **Debris cleanup optimizations:**
+    - **RemoveDebrisOlderThan() - Time-based cleanup (prevents accumulation)**
+    - **RemoveDebrisBeyondDistance() - Distance-based cleanup (maintains FPS)**
+    - **Spawn time tracking for each debris body**
+    - **Simulation time tracking for age calculations**
+    - **Automatic impact detector unregistration**
+  - **Performance features:**
+    - **Collision filtering: Major performance gain for large debris counts**
+    - **Age-based cleanup: Prevents unbounded memory growth**
+    - **Distance-based cleanup: Maintains performance in open worlds**
+    - **Bullet API direct access for accurate position queries**
+  - **Backward compatible with zero overhead when not used**
+- ✅ **Week 5 Day 30: Final Polish & Documentation**
+  - **Comprehensive API documentation:**
+    - **PHYSICS_API.md (4,900+ lines) - Complete Track 3 physics reference**
+    - **VoxelPhysicsIntegration API (all methods documented)**
+  - **ParticleSystem API with material-specific effects**
+  - **ImpactDetector API with Bullet integration**
+  - **RubbleSystem API for cover and navigation**
+  - **Performance optimization guide**
+  - **Troubleshooting section with common issues**
+  - **FullDestructionDemo executable:**
+    - **Complete destruction pipeline demonstration**
+    - **Builds 10x10x10 tower (1000 voxels)**
+    - **Damages bottom section (80 voxels destroyed)**
+    - **Shows Track 1 + Track 3 integration**
+    - **Demonstrates particles, cleanup, performance tracking**
+    - **10-second simulation with FPS reporting**
+  - **Code quality improvements:**
+    - **Unified Color struct with RGBA support**
+    - **Resolved header conflicts**
+    - **Clean compilation with all optimizations**
+  - **Week 5 complete - Production-ready physics system! 🎉**
+- ✅ **Week 7 Day 31: Turn-Based Integration**
+  - **TurnManager system for turn-based gameplay:**
+    - **Turn phase management (PLAYER_ACTION, STRUCTURAL_ANALYSIS, PHYSICS_SIMULATION, AI_TURN)**
+    - **Automatic phase transitions based on completion events**
+    - **Phase timing tracking for each turn state**
+    - **Notification system for structural analysis and physics completion**
+  - **KeyframeRecorder for physics playback:**
+    - **Records debris transforms during fast-forward simulation**
+    - **Enables smooth 60 FPS playback in turn-based games**
+    - **Minimal memory footprint with selective keyframe recording**
+  - **Integration features:**
+    - **Fast-forward physics simulation (runs faster than real-time)**
+    - **Turn-based timing control with state machine**
+    - **Automatic debris settling detection**
+    - **Complete turn cycle: Player → Analysis → Physics → AI**
+  - **13 turn-based integration tests (all passing)**
+  - **Ready for XCOM-style tactical destruction!**
+- ✅ **Week 7 Day 32: Visual Feedback Systems**
+  - **VoxelVisualizer for damage and failure visualization:**
+    - **HighlightDamagedVoxels() - Highlight damaged voxels for visual feedback**
+    - **ShowFailedClusters() - Visualize clusters that failed structural analysis**
+    - **AnimateCracking() - Crack effects at impact points**
+    - **Ready for OpenGL integration (currently console-based)**
+  - **DestructionUI for analysis and stats display:**
+    - **ShowStructuralAnalysis() - Display analysis results with formatted output**
+    - **ShowPhysicsStats() - Real-time physics simulation statistics**
+    - **ShowDebrisBreakdown() - Debris state breakdown (active/settling/settled)**
+    - **ShowWarning() - User notifications and warnings**
+    - **Beautiful console UI with box-drawing characters**
+  - **CameraEffects for impact feedback:**
+    - **TriggerShake() - Camera shake on impacts with intensity/duration control**
+    - **Procedural shake generation with smooth fade-out**
+    - **Automatic decay over time for natural feel**
+  - **TimeScale for dramatic slow-motion:**
+    - **SetSlowMotion() - Adjust time scale (0.0-1.0) for slow-motion effects**
+    - **Smooth transitions between time scales**
+    - **GetScaledDelta() - Apply time scaling to physics simulation**
+  - **21 visual feedback tests (all passing)**
+  - **Complete integration test showing full workflow**
+- ✅ **OpenGL Dependencies Setup (GLM, GLFW, GLAD)**
+  - **GLM (OpenGL Mathematics) as submodule - Header-only math library**
+  - **GLFW (Graphics Library Framework) as submodule - Window/context creation**
+  - **GLAD (OpenGL Loader) as submodule - Function loader for OpenGL 3.3 Core**
+  - **Optional OpenGL support (gracefully disabled when unavailable)**
+  - **RENDERING_ENABLED compile definition when available**
+  - **Ready for future rendering features**
+- ✅ **Week 7 Day 33: Test Scenarios & Polish**
+  - **Comprehensive test scenario system with automated validation**
+  - **5 realistic destruction scenarios:**
+    - **Tower Collapse - Vertical structure with base removal**
+    - **Building Corner Column - Large structure with support failure**
+    - **Bridge Support Removal - Span collapse simulation**
+    - **Redundant Wall Stability - Minor damage, structure remains standing**
+    - **Large-Scale Building - 1200+ voxel stress test**
+  - **Automated pass/fail validation with expected outcomes**
+  - **Complete pipeline testing: Setup → Damage → Analysis → Physics**
+  - **Performance tracking for each scenario (analysis + physics time)**
+  - **Beautiful console UI with detailed result reporting**
+  - **All 5 scenarios passing with excellent performance (27ms total analysis)**
+- ✅ **Week 7 Day 34: Performance Profiling & Large-Scale Verification**
+  - **Performance benchmark executable (PerformanceProfiling)**
+  - **Large-scale structure generation (1K, 10K, 50K voxels)**
+  - **Complete Track 1 + Track 3 performance testing**
+  - **Automated performance report generation**
+  - **All targets met: Track 1 < 500ms, Track 3 > 30 FPS**
+  - **Results: 3-58ms structural analysis, 113K+ FPS physics equivalent**
+- ✅ **Week 8 Day 35: Showcase Demo**
+  - **Comprehensive showcase executable demonstrating all features**
+  - **4 automated demo scenarios:**
+    - **Tower Collapse - Simple vertical structure destruction**
+    - **Building Corner Column - Complex multi-column failure**
+    - **Material Comparison - Wood vs Concrete vs Brick behaviors**
+    - **Turn-Based Integration - Complete phase cycle demonstration**
+  - **Beautiful console UI with formatted output**
+  - **Real-time performance statistics display**
+  - **Complete pipeline demonstration: Setup → Damage → Analysis → Physics**
+  - **Professional presentation suitable for portfolio/showcase**
+  - **All demos complete in < 15 seconds total runtime**
+- ✅ **Week 8 Day 36: Documentation & Polish**
+  - **Quick Start Guide - 15-minute tutorial from zero to first destruction**
+  - **Code Examples - 11 practical examples covering common use cases:**
+    - **Basic destruction, material comparison, turn-based integration**
+    - **Performance optimization, visual feedback, debris management**
+    - **Complete game loop implementation**
+  - **Enhanced README with badges, quick start, use case descriptions**
+  - **Reorganized documentation into Getting Started/API/Advanced sections**
+  - **Production-ready documentation suitable for open source release**
+  - **Clear learning path for new users**
 - ✅ Demo application with 6 test scenes
-- ✅ **275 unit tests (270 passing, 98.2%) ✓**
+- ✅ **422 unit tests (all passing, 100%) ✓**
+- ✅ **Week 8+: Max-Flow Structural Analyzer**
+  - **Alternative to spring system using Dinic's max-flow algorithm**
+  - **23x average speedup (0.98ms vs 13.93ms on benchmark suite)**
+  - **100% deterministic - same damage always gives same result**
+  - **75% accuracy vs FEM ground truth (vs 50% for springs)**
+  - **FEM validation module with analytical ground truth**
+  - **No iteration tuning required**
+  - **Bidirectional flow network models Newton's 3rd law**
+  - **21 unit tests + comparison demo + FEM validation suite**
+
+## Structural Analysis: Spring vs Max-Flow
+
+The engine offers **two structural analyzers** with identical interfaces - choose based on your needs:
+
+### Spring System (StructuralAnalyzer)
+```cpp
+StructuralAnalyzer analyzer;
+auto result = analyzer.Analyze(world, damaged_positions);
+```
+- ✅ **Easy to tune** - Many parameters for designer control
+- ✅ **Mature** - Extensively tested and documented
+- ⚠️ **Slower** - Iterative solver (50-100 iterations)
+- ⚠️ **Non-deterministic** - Minor variations due to numerical precision
+
+**Use when:** You need fine-grained control and can tolerate occasional numerical issues.
+
+### Max-Flow Algorithm (MaxFlowStructuralAnalyzer)
+```cpp
+MaxFlowStructuralAnalyzer analyzer;
+auto result = analyzer.Analyze(world, damaged_positions);  // Same interface!
+```
+- ✅ **23x faster** - Single-pass algorithm, no iterations
+- ✅ **Deterministic** - Perfectly reproducible results
+- ✅ **More accurate** - 75% FEM match vs 50% for springs (validated against ground truth)
+- ✅ **No tuning** - Just works out of the box
+- ⚠️ **Fewer parameters** - Less designer flexibility
+- ⚠️ **Conservative bias** - May predict failure for structures that could hold (safe for gameplay)
+
+**Use when:** You want maximum performance, determinism, and better accuracy.
+
+**Recommendation:** Start with **Max-Flow** for speed and reliability. Switch to **Spring** only if you need more control.
+
+**Compare them yourself:**
+```bash
+./bin/AnalyzerComparison  # Side-by-side performance comparison
+```
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+### Getting Started
 
-- **[API Documentation](docs/STRUCTURAL_ANALYZER_API.md)** - Complete StructuralAnalyzer API reference
-- **[Usage Guide](docs/USAGE_GUIDE.md)** - Practical examples and integration patterns
-- **[Parameter Tuning Guide](docs/PARAMETER_TUNING_GUIDE.md)** - Optimize performance and accuracy
-- **[PhysX Integration Guide](docs/PHYSX_INTEGRATION_GUIDE.md)** - Connect with NVIDIA PhysX physics engine
-- **[Week 4 Summary](docs/WEEK4_SUMMARY.md)** - Complete Week 4 accomplishments and metrics
+- **[Quick Start Guide](docs/QUICK_START.md)** - 15-minute tutorial from installation to first destruction
+- **[Code Examples](docs/EXAMPLES.md)** - Practical examples for common use cases
+- **[Usage Guide](docs/USAGE_GUIDE.md)** - Integration patterns and best practices
+
+### API Reference
+
+- **[Structural Analyzer API](docs/STRUCTURAL_ANALYZER_API.md)** - Complete Track 1 reference
+- **[Physics API](docs/PHYSICS_API.md)** - Complete Track 3 reference
+- **[Parameter Tuning Guide](docs/PARAMETER_TUNING_GUIDE.md)** - Performance optimization
+
+### Advanced Topics
+
+- **[PhysX Integration Guide](docs/PHYSX_INTEGRATION_GUIDE.md)** - Alternative physics engine
+- **[Track 1 Deep Dive](docs/track_1_structural_integrity_deep_dive.md)** - Algorithm details
+- **[Week 4 Summary](docs/WEEK4_SUMMARY.md)** - Development metrics
+- **[Load Redistribution Benchmark](docs/LOAD_REDISTRIBUTION_BENCHMARK.md)** - Runtime/behavioral comparisons for structural modes
 
 ### Planned
 - **Week 1-2:** Voxel world foundation (storage, rendering, clustering)
 - **Week 3-4:** Track 1 - Structural integrity analysis
 - **Week 5-6:** Track 3 - Physics integration (PhysX)
 - **Week 7-8:** Integration and polish
+- **Research Task:** Structural analyzer load-redistribution / hybrid support heuristics to capture progressive collapse scenarios.
+  1. **Heuristic Support Mode (current):** Displacement + ground-connectivity failure, with per-material support-distance thresholds.
+  2. **Stack-Depth Mode (implemented):** Require per-material vertical support stacks; nodes fail when local stack height drops below the threshold.
+  3. **Load-Redistribution Mode (implemented):** Iteratively rebalance supported mass through the spring graph when supports disappear; configurable iteration/tolerance/ground absorption settings plus telemetry flag nodes whose redistributed load exceeds material limits.
+  4. **Physics-Proxy Mode (implemented):** Build a lightweight Bullet proxy of the affected region, simulate briefly to detect overstressed beams, then tear down until further damage occurs. Settings live in `docs/STRUCTURAL_MODES_PLAN.md` and config files, and the analyzer falls back on heuristic modes automatically if Bullet is unavailable.
 
 ## Dependencies
 
 ### Required
 - C++17 compatible compiler (GCC 7+, Clang 5+, MSVC 2017+)
 - CMake 3.15+
-- OpenGL 3.3+
+- OpenGL 3.3+ (optional, rendering features disabled if unavailable)
+
+### Included as Submodules
+- **Bullet Physics 3.x** (physics simulation, zlib license)
+- **GLM** (OpenGL Mathematics - header-only math library)
+- **GLFW** (Graphics Library Framework - window/context creation)
+- **GLAD** (OpenGL Loader - function loader for OpenGL 3.3 Core)
 
 ### Optional (auto-downloaded if not found)
 - GoogleTest (testing framework)
-- GLM (math library, fallback available)
-- GLFW3 (windowing, needed for rendering in Week 1 Day 3)
 
 ## Building
 
 ### Linux/macOS
 
 ```bash
-# Install dependencies (Ubuntu/Debian)
-sudo apt-get install build-essential cmake libglfw3-dev libglm-dev
+# Install system dependencies (Ubuntu/Debian)
+# OpenGL is optional - if not available, rendering features will be disabled
+sudo apt-get install build-essential cmake libgl1-mesa-dev
+
+# Clone with submodules (includes Bullet, GLM, GLFW, GLAD)
+git submodule update --init --recursive
 
 # Build
 mkdir build && cd build
@@ -141,12 +512,15 @@ make
 ### Windows (Visual Studio)
 
 ```bash
-# Install dependencies via vcpkg
-vcpkg install glfw3 glm gtest
+# All dependencies are included as submodules - no vcpkg needed!
+# Just ensure you have OpenGL drivers installed (usually included with GPU drivers)
+
+# Clone with submodules
+git submodule update --init --recursive
 
 # Generate Visual Studio solution
 mkdir build && cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE=[vcpkg root]/scripts/buildsystems/vcpkg.cmake
+cmake ..
 
 # Open VoxelDestruction.sln in Visual Studio and build
 ```
@@ -400,10 +774,10 @@ Comprehensive design documentation available in `/docs`:
 
 This is a research prototype following a structured 8-week development plan. See `docs/8_week_sprint_plan.md` for the detailed roadmap.
 
+## Author
+
+- Emanuel Lönnberg
+
 ## License
 
-[To be determined]
-
-## Contact
-
-[Your contact information]
+This project is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License. See the [LICENSE](LICENSE) file for details.
